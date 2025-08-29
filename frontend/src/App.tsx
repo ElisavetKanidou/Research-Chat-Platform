@@ -1,6 +1,6 @@
 // frontend/src/App.tsx
 
-import ResearchChatPlatform from './components/ResearchChatPlatform';
+import ResearchChatPlatform from './paper/ResearchChatPlatform';
 
 function App() {
   return (
