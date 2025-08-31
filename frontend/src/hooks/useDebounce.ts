@@ -35,7 +35,8 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
   delay: number,
   deps: React.DependencyList = []
 ): T {
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  // Fix: Use number instead of NodeJS.Timeout for browser compatibility
+  const timeoutRef = useRef<number | undefined>(undefined);
   const callbackRef = useRef<T>(callback);
   
   // Update callback ref when dependencies change
@@ -49,7 +50,7 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
         clearTimeout(timeoutRef.current);
       }
       
-      timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = window.setTimeout(() => {
         callbackRef.current(...args);
       }, delay);
     }) as T,

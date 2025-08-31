@@ -1,7 +1,7 @@
 // components/layout/Sidebar.tsx
 import React from 'react';
 import { Home, FileText, MessageSquare, BarChart3, Settings, Plus, LogOut, User } from 'lucide-react';
-import { useGlobalContext } from '../../hooks/useGlobalContext';
+import { useGlobalContext } from '../../contexts/GlobalContext';
 
 interface SidebarProps {
   activeSection: string;
@@ -123,4 +123,3 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </div>
   );
 };
-

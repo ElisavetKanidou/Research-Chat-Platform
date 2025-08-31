@@ -304,7 +304,7 @@ export function useMultipleLocalStorage<T extends Record<string, any>>(
   }, [namespace]);
 
   const setValue = useCallback(<K extends keyof T>(key: K, value: T[K]) => {
-    updateValues({ [key]: value } as Partial<T>);
+    updateValues({ [key]: value } as unknown as Partial<T>);
   }, [updateValues]);
 
   const removeValue = useCallback(<K extends keyof T>(key: K) => {

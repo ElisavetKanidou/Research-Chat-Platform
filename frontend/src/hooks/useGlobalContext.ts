@@ -1,14 +1,7 @@
 // hooks/useGlobalContext.ts
-import { useContext } from 'react';
-import { GlobalContext } from '../contexts/GlobalContext';
 
-export const useGlobalContext = () => {
-  const context = useContext(GlobalContext);
-  if (!context) {
-    throw new Error('useGlobalContext must be used within a GlobalProvider');
-  }
-  return context;
-};
+// Simple re-export - no duplicate declaration
+export { useGlobalContext } from '../contexts/GlobalContext';
 
-// Re-export for convenience
-export * from '../contexts/GlobalContext';
+// Export types for convenience  
+export type { GlobalContextType, AppNotification, AppGlobalSettings } from '../contexts/GlobalContext';
