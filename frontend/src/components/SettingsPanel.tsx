@@ -1,5 +1,7 @@
+// components/SettingsPanel.tsx  
 import React, { useState } from 'react';
 import { User, Bell, Database, Shield, Palette, Globe, Save, Eye, EyeOff } from 'lucide-react';
+import { useGlobalContext } from '../contexts/GlobalContext';
 
 interface UserSettings {
   personalInfo: {
@@ -44,42 +46,44 @@ interface UserSettings {
   };
 }
 
-const SettingsPanel = () => {
+const SettingsPanel: React.FC = () => {
+  const { user, theme, setTheme, settings, updateSettings, addNotification } = useGlobalContext();
   const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'ai' | 'notifications' | 'privacy' | 'integrations'>('profile');
   const [showPassword, setShowPassword] = useState(false);
-  const [settings, setSettings] = useState<UserSettings>({
+  
+  const [localSettings, setLocalSettings] = useState<UserSettings>({
     personalInfo: {
-      name: 'Dr. Jane Smith',
-      email: 'jane.smith@university.edu',
-      affiliation: 'University of Technology',
-      researchInterests: ['Machine Learning', 'Natural Language Processing', 'Computer Vision'],
-      orcidId: '0000-0000-0000-0000'
+      name: user?.name || 'Dr. Jane Smith',
+      email: user?.email || 'jane.smith@university.edu',
+      affiliation: user?.personalInfo?.affiliation || 'University of Technology',
+      researchInterests: user?.personalInfo?.researchInterests || ['Machine Learning', 'Natural Language Processing', 'Computer Vision'],
+      orcidId: user?.personalInfo?.orcidId || '0000-0000-0000-0000'
     },
     preferences: {
-      theme: 'light',
-      language: 'English',
-      timezone: 'UTC-5 (EST)',
-      dateFormat: 'MM/DD/YYYY',
-      defaultWordCount: 8000
+      theme: theme || 'light',
+      language: user?.preferences?.language || 'English',
+      timezone: user?.preferences?.timezone || 'UTC-5 (EST)',
+      dateFormat: user?.preferences?.dateFormat || 'MM/DD/YYYY',
+      defaultWordCount: user?.preferences?.defaultWordCount || 8000
     },
     aiPersonalization: {
-      labLevel: 7,
-      personalLevel: 8,
-      globalLevel: 5,
-      writingStyle: 'academic',
-      researchFocus: ['Machine Learning', 'Data Science']
+      labLevel: user?.preferences?.aiPersonalization?.labLevel || 7,
+      personalLevel: user?.preferences?.aiPersonalization?.personalLevel || 8,
+      globalLevel: user?.preferences?.aiPersonalization?.globalLevel || 5,
+      writingStyle: user?.preferences?.aiPersonalization?.writingStyle || 'academic',
+      researchFocus: user?.preferences?.aiPersonalization?.researchFocus || ['Machine Learning', 'Data Science']
     },
     notifications: {
-      emailNotifications: true,
-      deadlineReminders: true,
-      collaborationUpdates: true,
-      aiSuggestions: false,
-      weeklyReports: true
+      emailNotifications: user?.preferences?.notifications?.emailNotifications ?? true,
+      deadlineReminders: user?.preferences?.notifications?.deadlineReminders ?? true,
+      collaborationUpdates: user?.preferences?.notifications?.collaborationUpdates ?? true,
+      aiSuggestions: user?.preferences?.notifications?.aiSuggestions ?? false,
+      weeklyReports: user?.preferences?.notifications?.weeklyReports ?? true
     },
     privacy: {
-      profileVisibility: 'institution',
-      shareAnalytics: true,
-      dataSyncEnabled: true
+      profileVisibility: user?.preferences?.privacy?.profileVisibility || 'institution',
+      shareAnalytics: user?.preferences?.privacy?.shareAnalytics ?? true,
+      dataSyncEnabled: user?.preferences?.privacy?.dataSyncEnabled ?? true
     },
     integrations: {
       googleDrive: true,
@@ -90,8 +94,8 @@ const SettingsPanel = () => {
     }
   });
 
-  const updateSettings = (section: keyof UserSettings, field: string, value: any) => {
-    setSettings(prev => ({
+  const updateLocalSettings = (section: keyof UserSettings, field: string, value: any) => {
+    setLocalSettings(prev => ({
       ...prev,
       [section]: {
         ...prev[section],
@@ -101,8 +105,27 @@ const SettingsPanel = () => {
   };
 
   const saveSettings = () => {
-    console.log('Saving settings:', settings);
-    alert('Settings saved successfully!');
+    console.log('Saving settings:', localSettings);
+    
+    // Update theme immediately
+    if (localSettings.preferences.theme !== theme) {
+      setTheme(localSettings.preferences.theme as 'light' | 'dark');
+    }
+    
+    // Update global settings
+    updateSettings({
+      autoSave: settings.autoSave,
+      defaultView: settings.defaultView,
+      papersPerPage: settings.papersPerPage,
+      showPreview: settings.showPreview,
+      enableNotifications: localSettings.notifications.emailNotifications,
+    });
+
+    addNotification({
+      type: 'success',
+      title: 'Settings Saved',
+      message: 'Your preferences have been updated successfully',
+    });
   };
 
   const ProfileTab = () => (
@@ -114,8 +137,8 @@ const SettingsPanel = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
             <input
               type="text"
-              value={settings.personalInfo.name}
-              onChange={(e) => updateSettings('personalInfo', 'name', e.target.value)}
+              value={localSettings.personalInfo.name}
+              onChange={(e) => updateLocalSettings('personalInfo', 'name', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -123,8 +146,8 @@ const SettingsPanel = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
             <input
               type="email"
-              value={settings.personalInfo.email}
-              onChange={(e) => updateSettings('personalInfo', 'email', e.target.value)}
+              value={localSettings.personalInfo.email}
+              onChange={(e) => updateLocalSettings('personalInfo', 'email', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -132,8 +155,8 @@ const SettingsPanel = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Institution/Affiliation</label>
             <input
               type="text"
-              value={settings.personalInfo.affiliation}
-              onChange={(e) => updateSettings('personalInfo', 'affiliation', e.target.value)}
+              value={localSettings.personalInfo.affiliation}
+              onChange={(e) => updateLocalSettings('personalInfo', 'affiliation', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -141,8 +164,8 @@ const SettingsPanel = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">ORCID ID</label>
             <input
               type="text"
-              value={settings.personalInfo.orcidId}
-              onChange={(e) => updateSettings('personalInfo', 'orcidId', e.target.value)}
+              value={localSettings.personalInfo.orcidId}
+              onChange={(e) => updateLocalSettings('personalInfo', 'orcidId', e.target.value)}
               placeholder="0000-0000-0000-0000"
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -151,13 +174,13 @@ const SettingsPanel = () => {
         <div className="mt-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">Research Interests</label>
           <div className="flex flex-wrap gap-2 mb-2">
-            {settings.personalInfo.researchInterests.map((interest, index) => (
+            {localSettings.personalInfo.researchInterests.map((interest, index) => (
               <span key={index} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-1">
                 {interest}
                 <button
                   onClick={() => {
-                    const newInterests = settings.personalInfo.researchInterests.filter((_, i) => i !== index);
-                    updateSettings('personalInfo', 'researchInterests', newInterests);
+                    const newInterests = localSettings.personalInfo.researchInterests.filter((_, i) => i !== index);
+                    updateLocalSettings('personalInfo', 'researchInterests', newInterests);
                   }}
                   className="text-blue-500 hover:text-blue-700"
                 >
@@ -173,8 +196,8 @@ const SettingsPanel = () => {
             onKeyPress={(e) => {
               if (e.key === 'Enter') {
                 const value = (e.target as HTMLInputElement).value.trim();
-                if (value && !settings.personalInfo.researchInterests.includes(value)) {
-                  updateSettings('personalInfo', 'researchInterests', [...settings.personalInfo.researchInterests, value]);
+                if (value && !localSettings.personalInfo.researchInterests.includes(value)) {
+                  updateLocalSettings('personalInfo', 'researchInterests', [...localSettings.personalInfo.researchInterests, value]);
                   (e.target as HTMLInputElement).value = '';
                 }
               }
@@ -234,8 +257,8 @@ const SettingsPanel = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Theme</label>
             <select
-              value={settings.preferences.theme}
-              onChange={(e) => updateSettings('preferences', 'theme', e.target.value)}
+              value={localSettings.preferences.theme}
+              onChange={(e) => updateLocalSettings('preferences', 'theme', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="light">Light</option>
@@ -246,8 +269,8 @@ const SettingsPanel = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
             <select
-              value={settings.preferences.language}
-              onChange={(e) => updateSettings('preferences', 'language', e.target.value)}
+              value={localSettings.preferences.language}
+              onChange={(e) => updateLocalSettings('preferences', 'language', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="English">English</option>
@@ -260,8 +283,8 @@ const SettingsPanel = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
             <select
-              value={settings.preferences.timezone}
-              onChange={(e) => updateSettings('preferences', 'timezone', e.target.value)}
+              value={localSettings.preferences.timezone}
+              onChange={(e) => updateLocalSettings('preferences', 'timezone', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="UTC-5 (EST)">UTC-5 (EST)</option>
@@ -274,8 +297,8 @@ const SettingsPanel = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
             <select
-              value={settings.preferences.dateFormat}
-              onChange={(e) => updateSettings('preferences', 'dateFormat', e.target.value)}
+              value={localSettings.preferences.dateFormat}
+              onChange={(e) => updateLocalSettings('preferences', 'dateFormat', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="MM/DD/YYYY">MM/DD/YYYY</option>
@@ -288,8 +311,8 @@ const SettingsPanel = () => {
           <label className="block text-sm font-medium text-gray-700 mb-2">Default Target Word Count</label>
           <input
             type="number"
-            value={settings.preferences.defaultWordCount}
-            onChange={(e) => updateSettings('preferences', 'defaultWordCount', parseInt(e.target.value))}
+            value={localSettings.preferences.defaultWordCount}
+            onChange={(e) => updateLocalSettings('preferences', 'defaultWordCount', parseInt(e.target.value))}
             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             min="1000"
             max="50000"
@@ -308,42 +331,42 @@ const SettingsPanel = () => {
         <div className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Lab Papers Influence: {settings.aiPersonalization.labLevel}/10
+              Lab Papers Influence: {localSettings.aiPersonalization.labLevel}/10
             </label>
             <input
               type="range"
               min="1"
               max="10"
-              value={settings.aiPersonalization.labLevel}
-              onChange={(e) => updateSettings('aiPersonalization', 'labLevel', parseInt(e.target.value))}
+              value={localSettings.aiPersonalization.labLevel}
+              onChange={(e) => updateLocalSettings('aiPersonalization', 'labLevel', parseInt(e.target.value))}
               className="w-full"
             />
             <p className="text-xs text-gray-500">How much the AI considers your lab's research patterns</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Personal Papers Influence: {settings.aiPersonalization.personalLevel}/10
+              Personal Papers Influence: {localSettings.aiPersonalization.personalLevel}/10
             </label>
             <input
               type="range"
               min="1"
               max="10"
-              value={settings.aiPersonalization.personalLevel}
-              onChange={(e) => updateSettings('aiPersonalization', 'personalLevel', parseInt(e.target.value))}
+              value={localSettings.aiPersonalization.personalLevel}
+              onChange={(e) => updateLocalSettings('aiPersonalization', 'personalLevel', parseInt(e.target.value))}
               className="w-full"
             />
             <p className="text-xs text-gray-500">How much the AI adapts to your individual writing style</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Global Literature Influence: {settings.aiPersonalization.globalLevel}/10
+              Global Literature Influence: {localSettings.aiPersonalization.globalLevel}/10
             </label>
             <input
               type="range"
               min="1"
               max="10"
-              value={settings.aiPersonalization.globalLevel}
-              onChange={(e) => updateSettings('aiPersonalization', 'globalLevel', parseInt(e.target.value))}
+              value={localSettings.aiPersonalization.globalLevel}
+              onChange={(e) => updateLocalSettings('aiPersonalization', 'globalLevel', parseInt(e.target.value))}
               className="w-full"
             />
             <p className="text-xs text-gray-500">How much the AI considers broader field trends</p>
@@ -351,8 +374,8 @@ const SettingsPanel = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Writing Style</label>
             <select
-              value={settings.aiPersonalization.writingStyle}
-              onChange={(e) => updateSettings('aiPersonalization', 'writingStyle', e.target.value)}
+              value={localSettings.aiPersonalization.writingStyle}
+              onChange={(e) => updateLocalSettings('aiPersonalization', 'writingStyle', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="academic">Academic - Formal and structured</option>
@@ -364,13 +387,13 @@ const SettingsPanel = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Primary Research Focus Areas</label>
             <div className="flex flex-wrap gap-2 mb-2">
-              {settings.aiPersonalization.researchFocus.map((focus, index) => (
+              {localSettings.aiPersonalization.researchFocus.map((focus, index) => (
                 <span key={index} className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm flex items-center gap-1">
                   {focus}
                   <button
                     onClick={() => {
-                      const newFocus = settings.aiPersonalization.researchFocus.filter((_, i) => i !== index);
-                      updateSettings('aiPersonalization', 'researchFocus', newFocus);
+                      const newFocus = localSettings.aiPersonalization.researchFocus.filter((_, i) => i !== index);
+                      updateLocalSettings('aiPersonalization', 'researchFocus', newFocus);
                     }}
                     className="text-purple-500 hover:text-purple-700"
                   >
@@ -386,8 +409,8 @@ const SettingsPanel = () => {
               onKeyPress={(e) => {
                 if (e.key === 'Enter') {
                   const value = (e.target as HTMLInputElement).value.trim();
-                  if (value && !settings.aiPersonalization.researchFocus.includes(value)) {
-                    updateSettings('aiPersonalization', 'researchFocus', [...settings.aiPersonalization.researchFocus, value]);
+                  if (value && !localSettings.aiPersonalization.researchFocus.includes(value)) {
+                    updateLocalSettings('aiPersonalization', 'researchFocus', [...localSettings.aiPersonalization.researchFocus, value]);
                     (e.target as HTMLInputElement).value = '';
                   }
                 }
@@ -404,7 +427,7 @@ const SettingsPanel = () => {
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Notification Preferences</h3>
         <div className="space-y-4">
-          {Object.entries(settings.notifications).map(([key, value]) => {
+          {Object.entries(localSettings.notifications).map(([key, value]) => {
             const labels = {
               emailNotifications: 'Email Notifications',
               deadlineReminders: 'Deadline Reminders',
@@ -429,7 +452,7 @@ const SettingsPanel = () => {
                   <input
                     type="checkbox"
                     checked={value}
-                    onChange={(e) => updateSettings('notifications', key, e.target.checked)}
+                    onChange={(e) => updateLocalSettings('notifications', key, e.target.checked)}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -450,8 +473,8 @@ const SettingsPanel = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Profile Visibility</label>
             <select
-              value={settings.privacy.profileVisibility}
-              onChange={(e) => updateSettings('privacy', 'profileVisibility', e.target.value)}
+              value={localSettings.privacy.profileVisibility}
+              onChange={(e) => updateLocalSettings('privacy', 'profileVisibility', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="public">Public - Visible to everyone</option>
@@ -467,8 +490,8 @@ const SettingsPanel = () => {
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                checked={settings.privacy.shareAnalytics}
-                onChange={(e) => updateSettings('privacy', 'shareAnalytics', e.target.checked)}
+                checked={localSettings.privacy.shareAnalytics}
+                onChange={(e) => updateLocalSettings('privacy', 'shareAnalytics', e.target.checked)}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -482,8 +505,8 @@ const SettingsPanel = () => {
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                checked={settings.privacy.dataSyncEnabled}
-                onChange={(e) => updateSettings('privacy', 'dataSyncEnabled', e.target.checked)}
+                checked={localSettings.privacy.dataSyncEnabled}
+                onChange={(e) => updateLocalSettings('privacy', 'dataSyncEnabled', e.target.checked)}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -513,7 +536,7 @@ const SettingsPanel = () => {
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">External Integrations</h3>
         <div className="space-y-4">
-          {Object.entries(settings.integrations).map(([key, value]) => {
+          {Object.entries(localSettings.integrations).map(([key, value]) => {
             const integrationInfo = {
               googleDrive: { name: 'Google Drive', desc: 'Sync papers with Google Drive' },
               dropbox: { name: 'Dropbox', desc: 'Backup papers to Dropbox' },
@@ -536,7 +559,7 @@ const SettingsPanel = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => updateSettings('integrations', key, !value)}
+                  onClick={() => updateLocalSettings('integrations', key, !value)}
                   className={`px-4 py-2 rounded-lg font-medium ${
                     value
                       ? 'bg-red-100 text-red-700 hover:bg-red-200'

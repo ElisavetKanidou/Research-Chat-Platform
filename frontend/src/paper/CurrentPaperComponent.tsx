@@ -1,54 +1,29 @@
 import React, { useState } from 'react';
-import { FileText, Save, Download, Edit3, Calendar, Users, Target, BookOpen } from 'lucide-react';
+import { FileText, Save, Download, Edit3, Calendar, Users, Target } from 'lucide-react';
+import { useGlobalContext } from '../contexts/GlobalContext';
+import type { PaperSection } from '../types/paper';
 
-interface PaperSection {
-  id: string;
-  title: string;
-  content: string;
-  status: 'not-started' | 'in-progress' | 'completed' | 'needs-review';
-  lastModified: Date;
-  wordCount: number;
-}
-
-interface CurrentPaper {
-  id: string;
-  title: string;
-  abstract: string;
-  status: 'draft' | 'in-review' | 'revision' | 'completed';
-  createdAt: Date;
-  lastModified: Date;
-  totalWordCount: number;
-  targetWordCount: number;
-  coAuthors: string[];
-  researchArea: string;
-  sections: PaperSection[];
-}
-
-const CurrentPaperComponent = () => {
-  const [currentPaper, setCurrentPaper] = useState<CurrentPaper>({
-    id: '1',
-    title: 'Untitled Research Paper',
-    abstract: '',
-    status: 'draft',
-    createdAt: new Date(),
-    lastModified: new Date(),
-    totalWordCount: 0,
-    targetWordCount: 8000,
-    coAuthors: [],
-    researchArea: '',
-    sections: [
-      { id: '1', title: 'Introduction', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0 },
-      { id: '2', title: 'Literature Review', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0 },
-      { id: '3', title: 'Methodology', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0 },
-      { id: '4', title: 'Results', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0 },
-      { id: '5', title: 'Discussion', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0 },
-      { id: '6', title: 'Conclusion', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0 }
-    ]
-  });
-
+const CurrentPaperComponent: React.FC = () => {
+  const { activePaper, updatePaper, addNotification } = useGlobalContext();
   const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(currentPaper.title);
+  const [editTitle, setEditTitle] = useState(activePaper?.title || '');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
+
+  if (!activePaper) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <FileText size={48} className="mx-auto text-gray-300 mb-4" />
+          <p className="text-gray-500">No paper selected</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Fix: Define lastModified variable
+  const lastModified = activePaper.lastModified instanceof Date 
+    ? activePaper.lastModified 
+    : new Date(activePaper.lastModified);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -69,38 +44,124 @@ const CurrentPaperComponent = () => {
     }
   };
 
-  const updatePaperTitle = () => {
-    setCurrentPaper(prev => ({
-      ...prev,
-      title: editTitle,
-      lastModified: new Date()
-    }));
-    setIsEditing(false);
+  const updatePaperTitle = async () => {
+    try {
+      await updatePaper(activePaper.id, { title: editTitle });
+      setIsEditing(false);
+      addNotification({
+        type: 'success',
+        title: 'Title Updated',
+        message: 'Paper title has been updated successfully',
+        autoRemove: true,
+      });
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: 'Update Failed',
+        message: 'Failed to update paper title',
+      });
+    }
   };
 
-  const updateSectionStatus = (sectionId: string, newStatus: PaperSection['status']) => {
-    setCurrentPaper(prev => ({
-      ...prev,
-      sections: prev.sections.map(section =>
+  const updateSectionStatus = async (sectionId: string, newStatus: PaperSection['status']) => {
+    try {
+      const updatedSections = activePaper.sections.map(section =>
         section.id === sectionId
           ? { ...section, status: newStatus, lastModified: new Date() }
           : section
-      ),
-      lastModified: new Date()
-    }));
+      );
+
+      // Calculate new progress
+      const completedSections = updatedSections.filter(s => s.status === 'completed').length;
+      const newProgress = Math.round((completedSections / updatedSections.length) * 100);
+
+      await updatePaper(activePaper.id, {
+        sections: updatedSections,
+        progress: newProgress,
+      });
+
+      addNotification({
+        type: 'success',
+        title: 'Section Updated',
+        message: 'Section status updated successfully',
+        autoRemove: true,
+      });
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: 'Update Failed',
+        message: 'Failed to update section status',
+      });
+    }
+  };
+
+  const updateAbstract = async (newAbstract: string) => {
+    try {
+      await updatePaper(activePaper.id, { abstract: newAbstract });
+    } catch (error) {
+      console.error('Failed to update abstract:', error);
+    }
+  };
+
+  const updateResearchArea = async (newArea: string) => {
+    try {
+      await updatePaper(activePaper.id, { researchArea: newArea });
+    } catch (error) {
+      console.error('Failed to update research area:', error);
+    }
+  };
+
+  const addCoAuthor = async (authorName: string) => {
+    if (authorName.trim() && !activePaper.coAuthors.includes(authorName.trim())) {
+      try {
+        await updatePaper(activePaper.id, {
+          coAuthors: [...activePaper.coAuthors, authorName.trim()]
+        });
+      } catch (error) {
+        console.error('Failed to add co-author:', error);
+      }
+    }
+  };
+
+  const removeCoAuthor = async (index: number) => {
+    try {
+      const newCoAuthors = activePaper.coAuthors.filter((_, i) => i !== index);
+      await updatePaper(activePaper.id, { coAuthors: newCoAuthors });
+    } catch (error) {
+      console.error('Failed to remove co-author:', error);
+    }
   };
 
   const exportToPDF = () => {
     // Placeholder for PDF export functionality
     console.log('Exporting to PDF...');
+    addNotification({
+      type: 'info',
+      title: 'Export Started',
+      message: 'PDF export is being processed...',
+    });
     // In real implementation, you would integrate with a PDF library like jsPDF
-    alert('PDF export functionality would be implemented here');
   };
 
-  const saveToCloud = () => {
-    console.log('Saving to cloud...');
-    alert('Paper saved successfully!');
+  const saveToCloud = async () => {
+    try {
+      await updatePaper(activePaper.id, { lastModified: new Date() });
+      addNotification({
+        type: 'success',
+        title: 'Saved',
+        message: 'Paper saved to cloud successfully',
+        autoRemove: true,
+      });
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        title: 'Save Failed',
+        message: 'Failed to save paper to cloud',
+      });
+    }
   };
+
+  const abstractWordCount = activePaper.abstract ? activePaper.abstract.trim().split(/\s+/).length : 0;
 
   return (
     <div className="space-y-6">
@@ -116,6 +177,7 @@ const CurrentPaperComponent = () => {
                   onChange={(e) => setEditTitle(e.target.value)}
                   className="text-xl font-bold border-b-2 border-blue-500 focus:outline-none flex-1"
                   onKeyPress={(e) => e.key === 'Enter' && updatePaperTitle()}
+                  onBlur={updatePaperTitle}
                 />
                 <button
                   onClick={updatePaperTitle}
@@ -126,9 +188,12 @@ const CurrentPaperComponent = () => {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-gray-900">{currentPaper.title}</h2>
+                <h2 className="text-xl font-bold text-gray-900">{activePaper.title}</h2>
                 <button
-                  onClick={() => setIsEditing(true)}
+                  onClick={() => {
+                    setIsEditing(true);
+                    setEditTitle(activePaper.title);
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <Edit3 size={16} />
@@ -138,14 +203,14 @@ const CurrentPaperComponent = () => {
             <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
               <span className="flex items-center gap-1">
                 <Calendar size={14} />
-                Last modified: {currentPaper.lastModified.toLocaleDateString()}
+                Last modified: {lastModified.toLocaleDateString()}
               </span>
               <span className="flex items-center gap-1">
                 <FileText size={14} />
-                {currentPaper.totalWordCount} / {currentPaper.targetWordCount} words
+                {activePaper.currentWordCount} / {activePaper.targetWordCount} words
               </span>
-              <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(currentPaper.status)}`}>
-                {currentPaper.status.replace('-', ' ').toUpperCase()}
+              <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(activePaper.status)}`}>
+                {activePaper.status.replace('-', ' ').toUpperCase()}
               </span>
             </div>
           </div>
@@ -171,14 +236,12 @@ const CurrentPaperComponent = () => {
         <div className="mb-4">
           <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
             <span>Overall Progress</span>
-            <span>{Math.round((currentPaper.sections.filter(s => s.status === 'completed').length / currentPaper.sections.length) * 100)}%</span>
+            <span>{activePaper.progress}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
               className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{
-                width: `${(currentPaper.sections.filter(s => s.status === 'completed').length / currentPaper.sections.length) * 100}%`
-              }}
+              style={{ width: `${activePaper.progress}%` }}
             />
           </div>
         </div>
@@ -186,24 +249,24 @@ const CurrentPaperComponent = () => {
         {/* Quick Stats */}
         <div className="grid grid-cols-4 gap-4 text-center">
           <div className="p-3 bg-gray-50 rounded-lg">
-            <div className="text-lg font-semibold text-gray-900">{currentPaper.sections.length}</div>
+            <div className="text-lg font-semibold text-gray-900">{activePaper.sections.length}</div>
             <div className="text-xs text-gray-600">Total Sections</div>
           </div>
           <div className="p-3 bg-green-50 rounded-lg">
             <div className="text-lg font-semibold text-green-600">
-              {currentPaper.sections.filter(s => s.status === 'completed').length}
+              {activePaper.sections.filter(s => s.status === 'completed').length}
             </div>
             <div className="text-xs text-gray-600">Completed</div>
           </div>
           <div className="p-3 bg-yellow-50 rounded-lg">
             <div className="text-lg font-semibold text-yellow-600">
-              {currentPaper.sections.filter(s => s.status === 'in-progress').length}
+              {activePaper.sections.filter(s => s.status === 'in-progress').length}
             </div>
             <div className="text-xs text-gray-600">In Progress</div>
           </div>
           <div className="p-3 bg-gray-50 rounded-lg">
             <div className="text-lg font-semibold text-gray-600">
-              {currentPaper.sections.filter(s => s.status === 'not-started').length}
+              {activePaper.sections.filter(s => s.status === 'not-started').length}
             </div>
             <div className="text-xs text-gray-600">Not Started</div>
           </div>
@@ -214,39 +277,45 @@ const CurrentPaperComponent = () => {
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Paper Sections</h3>
         <div className="space-y-3">
-          {currentPaper.sections.map((section) => (
-            <div
-              key={section.id}
-              className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
-              onClick={() => setSelectedSection(selectedSection === section.id ? null : section.id)}
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-lg">{getStatusIcon(section.status)}</span>
-                <div>
-                  <h4 className="font-medium text-gray-900">{section.title}</h4>
-                  <p className="text-sm text-gray-600">
-                    {section.wordCount} words • Last modified: {section.lastModified.toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(section.status)}`}>
-                  {section.status.replace('-', ' ')}
-                </span>
-                <select
-                  value={section.status}
-                  onChange={(e) => updateSectionStatus(section.id, e.target.value as PaperSection['status'])}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-sm border rounded px-2 py-1"
+          {activePaper.sections
+            .sort((a, b) => a.order - b.order)
+            .map((section) => {
+              const progress = section.wordCount > 0 ? Math.min((section.wordCount / (activePaper.targetWordCount / activePaper.sections.length)) * 100, 100) : 0;
+              
+              return (
+                <div
+                  key={section.id}
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                  onClick={() => setSelectedSection(selectedSection === section.id ? null : section.id)}
                 >
-                  <option value="not-started">Not Started</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="needs-review">Needs Review</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </div>
-            </div>
-          ))}
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">{getStatusIcon(section.status)}</span>
+                    <div>
+                      <h4 className="font-medium text-gray-900">{section.title}</h4>
+                      <p className="text-sm text-gray-600">
+                        {section.wordCount} words • Last modified: {section.lastModified instanceof Date ? section.lastModified.toLocaleDateString() : new Date(section.lastModified).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(section.status)}`}>
+                      {section.status.replace('-', ' ')}
+                    </span>
+                    <select
+                      value={section.status}
+                      onChange={(e) => updateSectionStatus(section.id, e.target.value as PaperSection['status'])}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-sm border rounded px-2 py-1"
+                    >
+                      <option value="not-started">Not Started</option>
+                      <option value="in-progress">In Progress</option>
+                      <option value="needs-review">Needs Review</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+                </div>
+              );
+            })}
         </div>
       </div>
 
@@ -254,19 +323,21 @@ const CurrentPaperComponent = () => {
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Abstract</h3>
         <textarea
-          value={currentPaper.abstract}
-          onChange={(e) => setCurrentPaper(prev => ({ ...prev, abstract: e.target.value }))}
+          value={activePaper.abstract}
+          onChange={(e) => updateAbstract(e.target.value)}
           placeholder="Write your paper abstract here..."
           className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <div className="flex justify-between items-center mt-2 text-sm text-gray-600">
-          <span>Abstract: {currentPaper.abstract.split(' ').length - 1} words</span>
-          <span>Recommended: 150-250 words</span>
+          <span>Abstract: {abstractWordCount} words</span>
+          <span className={abstractWordCount >= 150 && abstractWordCount <= 250 ? 'text-green-600' : 'text-gray-500'}>
+            Recommended: 150-250 words
+          </span>
         </div>
       </div>
 
       {/* Research Area and Co-authors */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Target size={18} />
@@ -274,12 +345,13 @@ const CurrentPaperComponent = () => {
           </h3>
           <input
             type="text"
-            value={currentPaper.researchArea}
-            onChange={(e) => setCurrentPaper(prev => ({ ...prev, researchArea: e.target.value }))}
+            value={activePaper.researchArea}
+            onChange={(e) => updateResearchArea(e.target.value)}
             placeholder="e.g., Machine Learning, Artificial Intelligence"
             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+        
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Users size={18} />
@@ -287,33 +359,27 @@ const CurrentPaperComponent = () => {
           </h3>
           <input
             type="text"
-            placeholder="Add co-author names (comma separated)"
+            placeholder="Add co-author names (press Enter)"
             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             onKeyPress={(e) => {
               if (e.key === 'Enter') {
                 const value = (e.target as HTMLInputElement).value;
                 if (value.trim()) {
-                  setCurrentPaper(prev => ({
-                    ...prev,
-                    coAuthors: [...prev.coAuthors, value.trim()]
-                  }));
+                  addCoAuthor(value.trim());
                   (e.target as HTMLInputElement).value = '';
                 }
               }
             }}
           />
           <div className="mt-3 flex flex-wrap gap-2">
-            {currentPaper.coAuthors.map((author, index) => (
+            {activePaper.coAuthors.map((author, index) => (
               <span
                 key={index}
                 className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-1"
               >
                 {author}
                 <button
-                  onClick={() => setCurrentPaper(prev => ({
-                    ...prev,
-                    coAuthors: prev.coAuthors.filter((_, i) => i !== index)
-                  }))}
+                  onClick={() => removeCoAuthor(index)}
                   className="text-blue-500 hover:text-blue-700"
                 >
                   ×

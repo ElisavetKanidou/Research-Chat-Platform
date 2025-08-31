@@ -1,7 +1,7 @@
 // hooks/usePaperManagement.ts
 
 import { useState, useCallback, useEffect } from 'react';
-import { Paper, PaperSection } from '../types/paper';
+import type { Paper, PaperSection  } from '../types/paper';
 import { paperService } from '../services/paperService';
 
 export const usePaperManagement = () => {

@@ -1,9 +1,28 @@
 // contexts/GlobalContext.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Paper } from '../types/paper';
-import { User } from '../types/user';
+import type { Paper } from '../types/paper';
+import type { User } from '../types/user';
 import { usePaperManagement } from '../hooks/usePaperManagement';
 import { authService } from '../services/authService';
+import type { UserResponse } from '../types/api';
+
+// Local interfaces to avoid conflicts
+export interface AppNotification {
+  id: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  title: string;
+  message: string;
+  timestamp: Date;
+  autoRemove?: boolean;
+}
+
+export interface AppGlobalSettings {
+  autoSave: boolean;
+  defaultView: 'grid' | 'list';
+  papersPerPage: number;
+  showPreview: boolean;
+  enableNotifications: boolean;
+}
 
 interface GlobalContextType {
   // Paper management
@@ -29,35 +48,18 @@ interface GlobalContextType {
   setTheme: (theme: 'light' | 'dark') => void;
   
   // Notifications
-  notifications: Notification[];
-  addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
+  notifications: AppNotification[];
+  addNotification: (notification: Omit<AppNotification, 'id' | 'timestamp'>) => void;
   removeNotification: (id: string) => void;
   
   // Search
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  searchResults: any[];
+  searchResults: Paper[];
   
   // Settings
-  settings: GlobalSettings;
-  updateSettings: (updates: Partial<GlobalSettings>) => void;
-}
-
-interface Notification {
-  id: string;
-  type: 'success' | 'error' | 'warning' | 'info';
-  title: string;
-  message: string;
-  timestamp: Date;
-  autoRemove?: boolean;
-}
-
-interface GlobalSettings {
-  autoSave: boolean;
-  defaultView: 'grid' | 'list';
-  papersPerPage: number;
-  showPreview: boolean;
-  enableNotifications: boolean;
+  settings: AppGlobalSettings;
+  updateSettings: (updates: Partial<AppGlobalSettings>) => void;
 }
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
@@ -70,6 +72,57 @@ export const useGlobalContext = () => {
   return context;
 };
 
+const convertUserResponseToUser = (userData: UserResponse): User => {
+  return {
+    ...userData,
+    createdAt: new Date(userData.createdAt),
+    lastLoginAt: new Date(userData.lastLoginAt),
+    personalInfo: {
+      ...userData.personalInfo,
+      // Note: timezone is now only in preferences, not personalInfo
+    },
+    preferences: {
+      theme: 'light',
+      language: 'en',
+      timezone: 'UTC', // Main timezone location
+      dateFormat: 'MM/dd/yyyy',
+      defaultWordCount: 8000,
+      autoSave: true,
+      notifications: {
+        emailNotifications: true,
+        deadlineReminders: true,
+        collaborationUpdates: true,
+        aiSuggestions: true,
+        weeklyReports: false,
+        pushNotifications: true,
+        reminderFrequency: 'weekly',
+      },
+      privacy: {
+        profileVisibility: 'private',
+        shareAnalytics: false,
+        dataSyncEnabled: true,
+        allowResearchSharing: false,
+        trackingOptOut: false,
+      },
+      aiPersonalization: {
+        labLevel: 3,
+        personalLevel: 2,
+        globalLevel: 1,
+        writingStyle: 'academic',
+        researchFocus: userData.personalInfo.researchInterests,
+        suggestionsEnabled: true,
+        contextDepth: 'moderate',
+      },
+    },
+    subscription: {
+      plan: 'free',
+      status: 'active',
+      startDate: new Date(),
+      features: [],
+    },
+  };
+};
+
 export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Paper management from custom hook
   const paperManagement = usePaperManagement();
@@ -79,96 +132,127 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   
   // UI state
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sidebar-collapsed');
+      return saved ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
+  });
+  
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('app-theme') as 'light' | 'dark';
+      return saved || 'light';
+    } catch {
+      return 'light';
+    }
+  });
   
   // Notifications
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   
   // Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<Paper[]>([]);
   
   // Settings
-  const [settings, setSettings] = useState<GlobalSettings>({
-    autoSave: true,
-    defaultView: 'grid',
-    papersPerPage: 12,
-    showPreview: true,
-    enableNotifications: true,
+  const [settings, setSettings] = useState<AppGlobalSettings>(() => {
+    try {
+      const saved = localStorage.getItem('app-settings');
+      return saved ? { ...{
+        autoSave: true,
+        defaultView: 'grid' as const,
+        papersPerPage: 12,
+        showPreview: true,
+        enableNotifications: true,
+      }, ...JSON.parse(saved) } : {
+        autoSave: true,
+        defaultView: 'grid' as const,
+        papersPerPage: 12,
+        showPreview: true,
+        enableNotifications: true,
+      };
+    } catch {
+      return {
+        autoSave: true,
+        defaultView: 'grid' as const,
+        papersPerPage: 12,
+        showPreview: true,
+        enableNotifications: true,
+      };
+    }
   });
 
   // Initialize user data
   useEffect(() => {
     const initializeUser = async () => {
-      const token = authService.getAccessToken();
-      const userData = authService.getUserData();
-      
-      if (token && userData) {
-        setUser(userData as User);
-        setIsAuthenticated(true);
+      try {
+        const token = authService.getAccessToken();
+        const userData = authService.getUserData();
         
-        try {
-          // Verify token is still valid
-          await authService.getCurrentUser();
-        } catch (error) {
-          // Token invalid, clear auth data
-          authService.clearAuthData();
-          setUser(null);
-          setIsAuthenticated(false);
+        if (token && userData) {
+          const userWithDates = convertUserResponseToUser(userData);
+          setUser(userWithDates);
+          setIsAuthenticated(true);
+          
+          try {
+            // Verify token is still valid
+            await authService.getCurrentUser();
+          } catch (error) {
+            console.warn('Token validation failed:', error);
+            // Token invalid, clear auth data
+            authService.clearAuthData();
+            setUser(null);
+            setIsAuthenticated(false);
+          }
         }
+      } catch (error) {
+        console.error('Failed to initialize user:', error);
+        setIsAuthenticated(false);
       }
     };
 
     initializeUser();
   }, []);
 
-  // Load settings from localStorage
+  // Persist settings to localStorage
   useEffect(() => {
-    const savedSettings = localStorage.getItem('app-settings');
-    if (savedSettings) {
-      try {
-        setSettings({ ...settings, ...JSON.parse(savedSettings) });
-      } catch (error) {
-        console.error('Failed to load settings:', error);
-      }
+    try {
+      localStorage.setItem('app-settings', JSON.stringify(settings));
+    } catch (error) {
+      console.error('Failed to save settings:', error);
     }
-
-    const savedTheme = localStorage.getItem('app-theme') as 'light' | 'dark';
-    if (savedTheme) {
-      setTheme(savedTheme);
-    }
-
-    const savedSidebarState = localStorage.getItem('sidebar-collapsed');
-    if (savedSidebarState) {
-      setSidebarCollapsed(JSON.parse(savedSidebarState));
-    }
-  }, []);
-
-  // Save settings to localStorage
-  useEffect(() => {
-    localStorage.setItem('app-settings', JSON.stringify(settings));
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem('app-theme', theme);
+    try {
+      localStorage.setItem('app-theme', theme);
+    } catch (error) {
+      console.error('Failed to save theme:', error);
+    }
   }, [theme]);
 
   useEffect(() => {
-    localStorage.setItem('sidebar-collapsed', JSON.stringify(sidebarCollapsed));
+    try {
+      localStorage.setItem('sidebar-collapsed', JSON.stringify(sidebarCollapsed));
+    } catch (error) {
+      console.error('Failed to save sidebar state:', error);
+    }
   }, [sidebarCollapsed]);
 
   // Notification management
-  const addNotification = (notification: Omit<Notification, 'id' | 'timestamp'>) => {
-    const newNotification: Notification = {
+  const addNotification = (notification: Omit<AppNotification, 'id' | 'timestamp'>) => {
+    const newNotification: AppNotification = {
       ...notification,
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date(),
     };
 
     setNotifications(prev => [...prev, newNotification]);
 
-    // Auto remove notification after 5 seconds if autoRemove is true
+    // Auto remove notification after 5 seconds if autoRemove is not explicitly false
     if (notification.autoRemove !== false) {
       setTimeout(() => {
         removeNotification(newNotification.id);
@@ -181,7 +265,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Settings management
-  const updateSettings = (updates: Partial<GlobalSettings>) => {
+  const updateSettings = (updates: Partial<AppGlobalSettings>) => {
     setSettings(prev => ({ ...prev, ...updates }));
   };
 
@@ -193,13 +277,15 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         type: 'success',
         title: 'Paper Created',
         message: `Successfully created "${paper.title}"`,
+        autoRemove: true,
       });
       return paper;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       addNotification({
         type: 'error',
         title: 'Creation Failed',
-        message: 'Failed to create paper. Please try again.',
+        message: `Failed to create paper: ${errorMessage}`,
       });
       throw error;
     }
@@ -213,17 +299,18 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addNotification({
           type: 'success',
           title: 'Paper Updated',
-          message: `Changes saved successfully`,
+          message: 'Changes saved successfully',
           autoRemove: true,
         });
       }
       
       return paper;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       addNotification({
         type: 'error',
         title: 'Update Failed',
-        message: 'Failed to save changes. Please try again.',
+        message: `Failed to save changes: ${errorMessage}`,
       });
       throw error;
     }
@@ -236,12 +323,14 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         type: 'success',
         title: 'Paper Deleted',
         message: 'Paper has been permanently deleted',
+        autoRemove: true,
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       addNotification({
         type: 'error',
         title: 'Deletion Failed',
-        message: 'Failed to delete paper. Please try again.',
+        message: `Failed to delete paper: ${errorMessage}`,
       });
       throw error;
     }
@@ -263,7 +352,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, 30000); // Auto-save every 30 seconds
 
     return () => clearInterval(autoSaveInterval);
-  }, [settings.autoSave, paperManagement.activePaper]);
+  }, [settings.autoSave, paperManagement.activePaper, paperManagement.updatePaper]);
 
   // Search functionality
   useEffect(() => {
@@ -331,3 +420,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     </GlobalContext.Provider>
   );
 };
+
+// Export only the context types with unique names
+export type { GlobalContextType };

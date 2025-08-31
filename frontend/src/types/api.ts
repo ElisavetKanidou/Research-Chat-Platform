@@ -1,4 +1,3 @@
-// types/api.ts
 export interface ApiResponse<T> {
   data: T;
   success: boolean;
@@ -378,12 +377,13 @@ export interface RateLimitInfo {
   retryAfter?: number;
 }
 
-export interface ApiHeaders extends HeadersInit {
+// Headers types
+export type ApiHeaders = Record<string, string> & {
   'X-Rate-Limit-Limit'?: string;
   'X-Rate-Limit-Remaining'?: string;
   'X-Rate-Limit-Reset'?: string;
   'X-Request-ID'?: string;
-}
+};
 
 // Generic API utilities
 export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -414,30 +414,36 @@ export interface ApiError {
 
 export type ApiResponseType = 'json' | 'text' | 'blob' | 'arraybuffer';
 
-// Status and error codes
-export enum HttpStatus {
-  OK = 200,
-  CREATED = 201,
-  NO_CONTENT = 204,
-  BAD_REQUEST = 400,
-  UNAUTHORIZED = 401,
-  FORBIDDEN = 403,
-  NOT_FOUND = 404,
-  CONFLICT = 409,
-  UNPROCESSABLE_ENTITY = 422,
-  TOO_MANY_REQUESTS = 429,
-  INTERNAL_SERVER_ERROR = 500,
-  BAD_GATEWAY = 502,
-  SERVICE_UNAVAILABLE = 503,
-}
+// ... (all your existing interfaces remain the same)
 
-export enum ApiErrorCode {
-  VALIDATION_ERROR = 'VALIDATION_ERROR',
-  AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
-  AUTHORIZATION_ERROR = 'AUTHORIZATION_ERROR',
-  RESOURCE_NOT_FOUND = 'RESOURCE_NOT_FOUND',
-  RESOURCE_CONFLICT = 'RESOURCE_CONFLICT',
-  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
-  SERVER_ERROR = 'SERVER_ERROR',
-  NETWORK_ERROR = 'NETWORK_ERROR',
-}
+// Status and error codes - Alternative approach with objects
+export const HttpStatus = {
+  OK: 200,
+  CREATED: 201,
+  NO_CONTENT: 204,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  UNPROCESSABLE_ENTITY: 422,
+  TOO_MANY_REQUESTS: 429,
+  INTERNAL_SERVER_ERROR: 500,
+  BAD_GATEWAY: 502,
+  SERVICE_UNAVAILABLE: 503,
+} as const;
+
+export const ApiErrorCode = {
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  AUTHENTICATION_ERROR: 'AUTHENTICATION_ERROR',
+  AUTHORIZATION_ERROR: 'AUTHORIZATION_ERROR',
+  RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND',
+  RESOURCE_CONFLICT: 'RESOURCE_CONFLICT',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  SERVER_ERROR: 'SERVER_ERROR',
+  NETWORK_ERROR: 'NETWORK_ERROR',
+} as const;
+
+// Type aliases for better type safety
+export type HttpStatusValue = typeof HttpStatus[keyof typeof HttpStatus];
+export type ApiErrorCodeValue = typeof ApiErrorCode[keyof typeof ApiErrorCode];

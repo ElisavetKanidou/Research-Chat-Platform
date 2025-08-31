@@ -22,7 +22,7 @@ export interface PersonalInfo {
   bio?: string;
   website?: string;
   location?: string;
-  timezone: string;
+  // Removed duplicate timezone - it belongs in UserPreferences
 }
 
 export interface UserPreferences {

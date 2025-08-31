@@ -1,417 +1,200 @@
 // services/paperService.ts
-
-import { Paper, PaperSection, ResearchPhase, Task } from '../types/paper';
-
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
-const STORAGE_KEY = 'researchhub_papers';
+import type { Paper } from '../types/paper';
+import { apiClient } from '../utils/apiHelpers';
 
 class PaperService {
-  private useLocalStorage = false; // Toggle for development
+  private readonly basePath = '/papers';
+  private readonly PAPERS_STORAGE_KEY = 'research_papers';
 
-  // Get all papers for current user
   async getAllPapers(): Promise<Paper[]> {
-    if (this.useLocalStorage) {
-      return this.getFromLocalStorage();
-    }
-
     try {
-      const response = await fetch(`${API_BASE_URL}/papers`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch papers: ${response.statusText}`);
-      }
-
-      return await response.json();
+      const response = await apiClient.get<Paper[]>(this.basePath);
+      return response;
     } catch (error) {
-      console.error('Error fetching papers:', error);
-      // Fallback to localStorage
-      return this.getFromLocalStorage();
+      console.log('API failed, using local storage fallback for papers');
+      return this.getLocalPapers();
     }
   }
 
-  // Get specific paper by ID
-  async getPaperById(paperId: string): Promise<Paper | null> {
-    if (this.useLocalStorage) {
-      const papers = this.getFromLocalStorage();
-      return papers.find(p => p.id === paperId) || null;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/papers/${paperId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) return null;
-        throw new Error(`Failed to fetch paper: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching paper:', error);
-      // Fallback to localStorage
-      const papers = this.getFromLocalStorage();
-      return papers.find(p => p.id === paperId) || null;
-    }
-  }
-
-  // Create new paper
   async createPaper(paper: Paper): Promise<Paper> {
-    if (this.useLocalStorage) {
-      return this.saveToLocalStorage(paper);
-    }
-
     try {
-      const response = await fetch(`${API_BASE_URL}/papers`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAuthToken()}`,
-        },
-        body: JSON.stringify(paper),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to create paper: ${response.statusText}`);
-      }
-
-      const createdPaper = await response.json();
-      // Also save to localStorage as backup
-      this.saveToLocalStorage(createdPaper);
-      return createdPaper;
+      const response = await apiClient.post<Paper>(this.basePath, paper);
+      return response;
     } catch (error) {
-      console.error('Error creating paper:', error);
-      // Fallback to localStorage
-      return this.saveToLocalStorage(paper);
+      console.log('API failed, using local storage fallback for paper creation');
+      return this.saveLocalPaper(paper);
     }
   }
 
-  // Update existing paper
   async updatePaper(paperId: string, updates: Partial<Paper>): Promise<Paper> {
-    if (this.useLocalStorage) {
-      return this.updateLocalStorage(paperId, updates);
-    }
-
     try {
-      const response = await fetch(`${API_BASE_URL}/papers/${paperId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAuthToken()}`,
-        },
-        body: JSON.stringify(updates),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to update paper: ${response.statusText}`);
-      }
-
-      const updatedPaper = await response.json();
-      // Also update localStorage
-      this.updateLocalStorage(paperId, updates);
-      return updatedPaper;
+      const response = await apiClient.patch<Paper>(`${this.basePath}/${paperId}`, updates);
+      return response;
     } catch (error) {
-      console.error('Error updating paper:', error);
-      // Fallback to localStorage
-      return this.updateLocalStorage(paperId, updates);
+      console.log('API failed, using local storage fallback for paper update');
+      return this.updateLocalPaper(paperId, updates);
     }
   }
 
-  // Delete paper
   async deletePaper(paperId: string): Promise<void> {
-    if (this.useLocalStorage) {
-      this.deleteFromLocalStorage(paperId);
-      return;
-    }
-
     try {
-      const response = await fetch(`${API_BASE_URL}/papers/${paperId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${this.getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to delete paper: ${response.statusText}`);
-      }
-
-      // Also remove from localStorage
-      this.deleteFromLocalStorage(paperId);
+      await apiClient.delete(`${this.basePath}/${paperId}`);
     } catch (error) {
-      console.error('Error deleting paper:', error);
-      // Fallback to localStorage
-      this.deleteFromLocalStorage(paperId);
+      console.log('API failed, using local storage fallback for paper deletion');
+      this.deleteLocalPaper(paperId);
     }
   }
 
-  // Update paper section
-  async updatePaperSection(paperId: string, sectionId: string, updates: Partial<PaperSection>): Promise<PaperSection> {
+  async getPaper(paperId: string): Promise<Paper> {
     try {
-      const response = await fetch(`${API_BASE_URL}/papers/${paperId}/sections/${sectionId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAuthToken()}`,
-        },
-        body: JSON.stringify(updates),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to update section: ${response.statusText}`);
-      }
-
-      return await response.json();
+      const response = await apiClient.get<Paper>(`${this.basePath}/${paperId}`);
+      return response;
     } catch (error) {
-      console.error('Error updating section:', error);
-      throw error;
+      console.log('API failed, using local storage fallback for paper retrieval');
+      const paper = this.getLocalPaper(paperId);
+      if (!paper) throw new Error('Paper not found');
+      return paper;
     }
   }
 
-  // Get research phases for paper
-  async getResearchPhases(paperId: string): Promise<ResearchPhase[]> {
+  // Local storage fallback methods
+  private getLocalPapers(): Paper[] {
     try {
-      const response = await fetch(`${API_BASE_URL}/papers/${paperId}/phases`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch research phases: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching research phases:', error);
-      return this.getDefaultResearchPhases(paperId);
-    }
-  }
-
-  // Export paper to various formats
-  async exportPaper(paperId: string, format: 'pdf' | 'docx' | 'latex'): Promise<Blob> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/papers/${paperId}/export/${format}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to export paper: ${response.statusText}`);
-      }
-
-      return await response.blob();
-    } catch (error) {
-      console.error('Error exporting paper:', error);
-      throw error;
-    }
-  }
-
-  // Search papers
-  async searchPapers(query: string, filters?: {
-    status?: string;
-    researchArea?: string;
-    dateFrom?: Date;
-    dateTo?: Date;
-  }): Promise<Paper[]> {
-    try {
-      const params = new URLSearchParams({
-        q: query,
-        ...filters && Object.entries(filters).reduce((acc, [key, value]) => {
-          if (value) acc[key] = value.toString();
-          return acc;
-        }, {} as Record<string, string>),
-      });
-
-      const response = await fetch(`${API_BASE_URL}/papers/search?${params}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to search papers: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error searching papers:', error);
-      // Fallback to local search
-      return this.searchLocalPapers(query, filters);
-    }
-  }
-
-  // Private methods for localStorage operations
-  private getFromLocalStorage(): Paper[] {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return [];
-      return JSON.parse(stored).map((paper: any) => ({
+      const stored = localStorage.getItem(this.PAPERS_STORAGE_KEY);
+      if (!stored) return this.getDefaultPapers();
+      
+      const papers = JSON.parse(stored);
+      return papers.map((paper: any) => ({
         ...paper,
         createdAt: new Date(paper.createdAt),
         lastModified: new Date(paper.lastModified),
-        sections: paper.sections?.map((section: any) => ({
+        publicationDate: paper.publicationDate ? new Date(paper.publicationDate) : undefined,
+        sections: paper.sections.map((section: any) => ({
           ...section,
           lastModified: new Date(section.lastModified),
-        })) || [],
+        })),
       }));
     } catch (error) {
-      console.error('Error reading from localStorage:', error);
-      return [];
+      console.error('Error loading papers from localStorage:', error);
+      return this.getDefaultPapers();
     }
   }
 
-  private saveToLocalStorage(paper: Paper): Paper {
+  private saveLocalPaper(paper: Paper): Paper {
+    const papers = this.getLocalPapers();
+    papers.push(paper);
+    this.saveLocalPapers(papers);
+    return paper;
+  }
+
+  private updateLocalPaper(paperId: string, updates: Partial<Paper>): Paper {
+    const papers = this.getLocalPapers();
+    const index = papers.findIndex(p => p.id === paperId);
+    
+    if (index === -1) throw new Error('Paper not found');
+    
+    const updatedPaper = { ...papers[index], ...updates, lastModified: new Date() };
+    papers[index] = updatedPaper;
+    this.saveLocalPapers(papers);
+    return updatedPaper;
+  }
+
+  private deleteLocalPaper(paperId: string): void {
+    const papers = this.getLocalPapers();
+    const filtered = papers.filter(p => p.id !== paperId);
+    this.saveLocalPapers(filtered);
+  }
+
+  private getLocalPaper(paperId: string): Paper | null {
+    const papers = this.getLocalPapers();
+    return papers.find(p => p.id === paperId) || null;
+  }
+
+  private saveLocalPapers(papers: Paper[]): void {
     try {
-      const papers = this.getFromLocalStorage();
-      const updatedPapers = [...papers, paper];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedPapers));
-      return paper;
+      localStorage.setItem(this.PAPERS_STORAGE_KEY, JSON.stringify(papers));
     } catch (error) {
-      console.error('Error saving to localStorage:', error);
-      throw error;
+      console.error('Error saving papers to localStorage:', error);
     }
   }
 
-  private updateLocalStorage(paperId: string, updates: Partial<Paper>): Paper {
-    try {
-      const papers = this.getFromLocalStorage();
-      const paperIndex = papers.findIndex(p => p.id === paperId);
-      
-      if (paperIndex === -1) {
-        throw new Error('Paper not found');
-      }
-
-      const updatedPaper = { ...papers[paperIndex], ...updates, lastModified: new Date() };
-      papers[paperIndex] = updatedPaper;
-      
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(papers));
-      return updatedPaper;
-    } catch (error) {
-      console.error('Error updating localStorage:', error);
-      throw error;
-    }
-  }
-
-  private deleteFromLocalStorage(paperId: string): void {
-    try {
-      const papers = this.getFromLocalStorage();
-      const filteredPapers = papers.filter(p => p.id !== paperId);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(filteredPapers));
-    } catch (error) {
-      console.error('Error deleting from localStorage:', error);
-    }
-  }
-
-  private searchLocalPapers(query: string, filters?: any): Paper[] {
-    const papers = this.getFromLocalStorage();
-    return papers.filter(paper => {
-      const matchesQuery = query === '' || 
-        paper.title.toLowerCase().includes(query.toLowerCase()) ||
-        paper.abstract.toLowerCase().includes(query.toLowerCase()) ||
-        paper.researchArea.toLowerCase().includes(query.toLowerCase());
-
-      const matchesStatus = !filters?.status || paper.status === filters.status;
-      const matchesArea = !filters?.researchArea || paper.researchArea === filters.researchArea;
-
-      return matchesQuery && matchesStatus && matchesArea;
-    });
-  }
-
-  private getAuthToken(): string {
-    // In a real app, this would come from your auth system
-    return localStorage.getItem('auth_token') || 'fake-token';
-  }
-
-  private getDefaultResearchPhases(paperId: string): ResearchPhase[] {
+  private getDefaultPapers(): Paper[] {
     return [
       {
+        id: '1',
+        title: 'Machine Learning in Healthcare: A Comprehensive Survey',
+        abstract: 'This paper explores the applications of machine learning in healthcare, examining current trends, challenges, and future opportunities in medical AI.',
+        status: 'in-progress',
+        createdAt: new Date('2024-01-15T10:00:00Z'),
+        lastModified: new Date('2024-01-20T14:30:00Z'),
+        progress: 75,
+        targetWordCount: 8000,
+        currentWordCount: 4500,
+        coAuthors: ['Dr. Smith', 'Dr. Johnson'],
+        researchArea: 'Healthcare AI',
+        sections: [
+          { id: '1', title: 'Introduction', content: 'Healthcare AI introduction...', status: 'completed', lastModified: new Date(), wordCount: 800, order: 1 },
+          { id: '2', title: 'Literature Review', content: 'Review of existing literature...', status: 'completed', lastModified: new Date(), wordCount: 1200, order: 2 },
+          { id: '3', title: 'Methodology', content: 'Research methodology...', status: 'in-progress', lastModified: new Date(), wordCount: 900, order: 3 },
+          { id: '4', title: 'Results', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0, order: 4 },
+          { id: '5', title: 'Discussion', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0, order: 5 },
+          { id: '6', title: 'Conclusion', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0, order: 6 }
+        ],
+        tags: ['machine learning', 'healthcare', 'AI'],
+        isPublic: false,
+      },
+      {
         id: '2',
-        name: 'Hypothesis Formation',
-        status: 'completed',
-        progress: 100,
-        startDate: new Date('2024-02-20'),
-        dueDate: new Date('2024-03-15'),
-        estimatedHours: 40,
-        actualHours: 45,
-        tasks: [],
-        paperId,
+        title: 'Natural Language Processing for Clinical Data',
+        abstract: 'An investigation into NLP techniques for processing and analyzing clinical text data to improve patient outcomes.',
+        status: 'draft',
+        createdAt: new Date('2024-01-10T09:00:00Z'),
+        lastModified: new Date('2024-01-18T11:15:00Z'),
+        progress: 30,
+        targetWordCount: 6000,
+        currentWordCount: 1200,
+        coAuthors: ['Dr. Brown'],
+        researchArea: 'Natural Language Processing',
+        sections: [
+          { id: '1', title: 'Introduction', content: 'NLP in clinical settings...', status: 'completed', lastModified: new Date(), wordCount: 600, order: 1 },
+          { id: '2', title: 'Literature Review', content: 'Prior work in clinical NLP...', status: 'in-progress', lastModified: new Date(), wordCount: 600, order: 2 },
+          { id: '3', title: 'Methodology', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0, order: 3 },
+          { id: '4', title: 'Results', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0, order: 4 },
+          { id: '5', title: 'Discussion', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0, order: 5 },
+          { id: '6', title: 'Conclusion', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0, order: 6 }
+        ],
+        tags: ['NLP', 'clinical data', 'text processing'],
+        isPublic: false,
       },
       {
         id: '3',
-        name: 'Methodology Design',
-        status: 'in-progress',
-        progress: 75,
-        startDate: new Date('2024-03-10'),
-        dueDate: new Date('2024-04-30'),
-        estimatedHours: 120,
-        actualHours: 90,
-        tasks: [],
-        paperId,
+        title: 'Deep Learning for Medical Image Analysis',
+        abstract: 'Comprehensive analysis of deep learning approaches for medical imaging, including CNN architectures and transfer learning.',
+        status: 'published',
+        createdAt: new Date('2023-12-01T08:00:00Z'),
+        lastModified: new Date('2024-01-05T16:45:00Z'),
+        progress: 100,
+        targetWordCount: 9000,
+        currentWordCount: 8200,
+        coAuthors: ['Dr. Wilson', 'Dr. Lee'],
+        researchArea: 'Medical Imaging',
+        sections: [
+          { id: '1', title: 'Introduction', content: 'Deep learning in medical imaging...', status: 'completed', lastModified: new Date(), wordCount: 1000, order: 1 },
+          { id: '2', title: 'Literature Review', content: 'Comprehensive literature review...', status: 'completed', lastModified: new Date(), wordCount: 1500, order: 2 },
+          { id: '3', title: 'Methodology', content: 'CNN architectures and methods...', status: 'completed', lastModified: new Date(), wordCount: 1800, order: 3 },
+          { id: '4', title: 'Results', content: 'Experimental results and analysis...', status: 'completed', lastModified: new Date(), wordCount: 2200, order: 4 },
+          { id: '5', title: 'Discussion', content: 'Discussion of findings...', status: 'completed', lastModified: new Date(), wordCount: 1200, order: 5 },
+          { id: '6', title: 'Conclusion', content: 'Conclusions and future work...', status: 'completed', lastModified: new Date(), wordCount: 500, order: 6 }
+        ],
+        tags: ['deep learning', 'medical imaging', 'CNN'],
+        isPublic: true,
+        doi: '10.1000/example.doi',
+        journal: 'Medical AI Journal',
+        publicationDate: new Date('2024-01-05'),
+        citationCount: 15,
       },
-      {
-        id: '4',
-        name: 'Data Collection',
-        status: 'pending',
-        progress: 0,
-        startDate: new Date('2024-05-01'),
-        dueDate: new Date('2024-07-31'),
-        estimatedHours: 200,
-        actualHours: 0,
-        tasks: [],
-        paperId,
-      },
-      {
-        id: '5',
-        name: 'Analysis & Results',
-        status: 'pending',
-        progress: 0,
-        startDate: new Date('2024-08-01'),
-        dueDate: new Date('2024-10-31'),
-        estimatedHours: 150,
-        actualHours: 0,
-        tasks: [],
-        paperId,
-      },
-      {
-        id: '6',
-        name: 'Paper Writing',
-        status: 'pending',
-        progress: 0,
-        startDate: new Date('2024-11-01'),
-        dueDate: new Date('2024-12-31'),
-        estimatedHours: 100,
-        actualHours: 0,
-        tasks: [],
-        paperId,
-      }
     ];
   }
 }
 
 export const paperService = new PaperService();
-        id: '1',
-        name: 'Literature Review',
-        status: 'completed',
-        progress: 100,
-        startDate: new Date('2024-01-15'),
-        dueDate: new Date('2024-02-28'),
-        estimatedHours: 80,
-        actualHours: 85,
-        tasks: [],
-        paperId,
-      },

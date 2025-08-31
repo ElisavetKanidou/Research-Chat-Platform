@@ -1,26 +1,34 @@
+// components/Analytics.tsx
 import React, { useState } from 'react';
 import { BarChart3, TrendingUp, Users, BookOpen, Award, Calendar, FileText, Clock, Target, Download } from 'lucide-react';
-import { useGlobalContext } from '../App';
+import { useGlobalContext } from '../contexts/GlobalContext';
 
-const Analytics = () => {
+const Analytics: React.FC = () => {
   const { papers } = useGlobalContext();
   const [timeFrame, setTimeFrame] = useState<'month' | 'quarter' | 'year' | 'all'>('quarter');
   const [activeTab, setActiveTab] = useState<'overview' | 'productivity' | 'collaboration' | 'research'>('overview');
 
+  // Ensure papers have proper date handling
+  const safePapers = papers.map(p => ({
+    ...p,
+    createdAt: p.createdAt instanceof Date ? p.createdAt : new Date(p.createdAt),
+    lastModified: p.lastModified instanceof Date ? p.lastModified : new Date(p.lastModified),
+  }));
+
   // Calculate comprehensive statistics
   const stats = {
-    totalPapers: papers.length,
-    publishedPapers: papers.filter(p => p.status === 'published').length,
-    inProgressPapers: papers.filter(p => ['draft', 'in-progress', 'in-review', 'revision'].includes(p.status)).length,
-    totalWords: papers.reduce((sum, p) => sum + p.currentWordCount, 0),
-    totalCollaborators: [...new Set(papers.flatMap(p => p.coAuthors))].length,
-    researchAreas: [...new Set(papers.map(p => p.researchArea).filter(Boolean))].length,
-    avgProgress: papers.length > 0 ? Math.round(papers.reduce((sum, p) => sum + p.progress, 0) / papers.length) : 0,
-    completionRate: papers.length > 0 ? Math.round((papers.filter(p => p.status === 'published').length / papers.length) * 100) : 0
+    totalPapers: safePapers.length,
+    publishedPapers: safePapers.filter(p => p.status === 'published').length,
+    inProgressPapers: safePapers.filter(p => ['draft', 'in-progress', 'in-review', 'revision'].includes(p.status)).length,
+    totalWords: safePapers.reduce((sum, p) => sum + p.currentWordCount, 0),
+    totalCollaborators: [...new Set(safePapers.flatMap(p => p.coAuthors))].length,
+    researchAreas: [...new Set(safePapers.map(p => p.researchArea).filter(Boolean))].length,
+    avgProgress: safePapers.length > 0 ? Math.round(safePapers.reduce((sum, p) => sum + p.progress, 0) / safePapers.length) : 0,
+    completionRate: safePapers.length > 0 ? Math.round((safePapers.filter(p => p.status === 'published').length / safePapers.length) * 100) : 0
   };
 
   // Research areas distribution
-  const researchAreasData = papers.reduce((acc, paper) => {
+  const researchAreasData = safePapers.reduce((acc, paper) => {
     if (paper.researchArea) {
       acc[paper.researchArea] = (acc[paper.researchArea] || 0) + 1;
     }
@@ -28,7 +36,7 @@ const Analytics = () => {
   }, {} as Record<string, number>);
 
   // Status distribution
-  const statusData = papers.reduce((acc, paper) => {
+  const statusData = safePapers.reduce((acc, paper) => {
     acc[paper.status] = (acc[paper.status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -44,7 +52,7 @@ const Analytics = () => {
   ];
 
   // Collaboration network data
-  const collaboratorStats = papers.flatMap(p => p.coAuthors).reduce((acc, author) => {
+  const collaboratorStats = safePapers.flatMap(p => p.coAuthors).reduce((acc, author) => {
     acc[author] = (acc[author] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -219,7 +227,7 @@ const Analytics = () => {
         </div>
       </div>
 
-      {/* Writing Velocity */}
+      {/* Writing Velocity and other productivity metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <div className="flex items-center justify-between mb-4">
@@ -259,11 +267,11 @@ const Analytics = () => {
         </div>
       </div>
 
-      {/* Research Milestones Timeline */}
+      {/* Research Timeline */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Research Timeline</h3>
         <div className="space-y-4">
-          {papers.slice(0, 5).map((paper, index) => (
+          {safePapers.slice(0, 5).map((paper, index) => (
             <div key={paper.id} className="flex items-center gap-4">
               <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full" />
               <div className="flex-1">
@@ -288,38 +296,35 @@ const Analytics = () => {
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Collaborators</h3>
         <div className="space-y-3">
-          {topCollaborators.map(([name, count], index) => (
-            <div key={name} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-medium text-blue-600">
-                  {name.split(' ').map(n => n[0]).join('')}
+          {topCollaborators.length > 0 ? (
+            topCollaborators.map(([name, count], index) => (
+              <div key={name} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-medium text-blue-600">
+                    {name.split(' ').map(n => n[0]).join('')}
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900">{name}</div>
+                    <div className="text-sm text-gray-600">{count} collaboration{count > 1 ? 's' : ''}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-medium text-gray-900">{name}</div>
-                  <div className="text-sm text-gray-600">{count} collaboration{count > 1 ? 's' : ''}</div>
+                <div className="flex items-center gap-2">
+                  <div className="w-16 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full"
+                      style={{ width: `${(count / Math.max(...topCollaborators.map(([,c]) => c))) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-sm text-gray-500">#{index + 1}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-16 bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-500 h-2 rounded-full"
-                    style={{ width: `${(count / Math.max(...topCollaborators.map(([,c]) => c))) * 100}%` }}
-                  />
-                </div>
-                <span className="text-sm text-gray-500">#{index + 1}</span>
-              </div>
+            ))
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <Users size={32} className="mx-auto mb-2 opacity-50" />
+              <p>No collaborators yet</p>
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Collaboration Network */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Collaboration Network</h3>
-        <div className="text-center py-8">
-          <Users size={48} className="mx-auto text-gray-300 mb-3" />
-          <p className="text-gray-500">Interactive collaboration network visualization would appear here</p>
-          <p className="text-sm text-gray-400 mt-1">Showing connections between co-authors and research areas</p>
+          )}
         </div>
       </div>
 
@@ -334,7 +339,7 @@ const Analytics = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <div className="text-center">
             <div className="text-3xl font-bold text-green-600 mb-2">
-              {stats.totalPapers > 0 ? Math.round(papers.reduce((sum, p) => sum + p.coAuthors.length, 0) / stats.totalPapers * 10) / 10 : 0}
+              {stats.totalPapers > 0 ? Math.round(safePapers.reduce((sum, p) => sum + p.coAuthors.length, 0) / stats.totalPapers * 10) / 10 : 0}
             </div>
             <div className="text-sm text-gray-600">Avg Co-authors per Paper</div>
           </div>
@@ -375,32 +380,11 @@ const Analytics = () => {
         </div>
       </div>
 
-      {/* Research Evolution */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Research Evolution</h3>
-        <div className="space-y-4">
-          {Object.entries(researchAreasData).map(([area, count]) => (
-            <div key={area}>
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-medium text-gray-900">{area || 'General Research'}</span>
-                <span className="text-sm text-gray-600">{count} papers</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div
-                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full"
-                  style={{ width: `${(count / stats.totalPapers) * 100}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Recent Publications */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Publications</h3>
         <div className="space-y-3">
-          {papers.filter(p => p.status === 'published').slice(0, 5).map((paper) => (
+          {safePapers.filter(p => p.status === 'published').slice(0, 5).map((paper) => (
             <div key={paper.id} className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg">
               <div className="p-2 bg-green-100 rounded">
                 <FileText size={16} className="text-green-600" />

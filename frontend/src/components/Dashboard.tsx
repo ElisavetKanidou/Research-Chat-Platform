@@ -1,23 +1,79 @@
+// components/Dashboard.tsx
 import React from 'react';
 import { FileText, Clock, CheckCircle, Users, Calendar, TrendingUp, AlertCircle, Plus, ArrowRight } from 'lucide-react';
-import { useGlobalContext } from '../App';
+import { useGlobalContext } from '../contexts/GlobalContext';
+import type { Paper } from '../types/paper';
+
+interface Deadline {
+  id: string;
+  title: string;
+  dueDate: Date;
+  paperId: string;
+}
 
 interface DashboardProps {
-  onPaperSelect: (paper: any) => void;
+  onPaperSelect: (paper: Paper) => void;
   onNewPaper: () => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper }) => {
-  const { papers } = useGlobalContext();
+  const { papers, loading, error, user } = useGlobalContext();
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-64 mb-4"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="bg-white p-6 rounded-lg shadow-sm border">
+                  <div className="h-16 bg-gray-200 rounded"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex">
+              <AlertCircle className="h-5 w-5 text-red-400" />
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">Error loading dashboard</h3>
+                <div className="mt-2 text-sm text-red-700">{error}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Ensure lastModified is a Date object
+  const safePapers = papers.map(p => ({
+    ...p,
+    lastModified: p.lastModified instanceof Date ? p.lastModified : new Date(p.lastModified),
+    createdAt: p.createdAt instanceof Date ? p.createdAt : new Date(p.createdAt)
+  }));
 
   // Calculate statistics
-  const activePapers = papers.filter(p => ['draft', 'in-progress', 'in-review', 'revision'].includes(p.status));
-  const publishedPapers = papers.filter(p => p.status === 'published');
-  const totalWordCount = papers.reduce((sum, p) => sum + p.currentWordCount, 0);
-  const avgProgress = papers.length > 0 ? Math.round(papers.reduce((sum, p) => sum + p.progress, 0) / papers.length) : 0;
+  const activePapers = safePapers.filter(p => ['draft', 'in-progress', 'in-review', 'revision'].includes(p.status));
+  const publishedPapers = safePapers.filter(p => p.status === 'published');
+  const completedPapers = safePapers.filter(p => p.status === 'completed');
+  const totalWordCount = safePapers.reduce((sum, p) => sum + p.currentWordCount, 0);
+  const avgProgress = safePapers.length > 0 ? Math.round(safePapers.reduce((sum, p) => sum + p.progress, 0) / safePapers.length) : 0;
 
   // Get recent activity (papers modified in last 7 days)
-  const recentActivity = papers
+  const recentActivity = safePapers
     .filter(p => {
       const daysDiff = Math.ceil((new Date().getTime() - p.lastModified.getTime()) / (1000 * 60 * 60 * 24));
       return daysDiff <= 7;
@@ -25,18 +81,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper }) => {
     .sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime())
     .slice(0, 5);
 
-  // Get upcoming deadlines (mock data - in real app would come from tasks/milestones)
-  const upcomingDeadlines = [
-    { id: '1', title: 'Submit Chapter 3 - ML Healthcare Paper', dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), paperId: '1' },
-    { id: '2', title: 'Peer Review Response - NLP Paper', dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), paperId: '2' },
-    { id: '3', title: 'Conference Presentation Prep', dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), paperId: '1' }
-  ];
+  // Get upcoming deadlines (mock data based on papers)
+  const upcomingDeadlines: Deadline[] = safePapers
+    .filter(p => ['in-progress', 'in-review', 'revision'].includes(p.status))
+    .map((paper, index) => ({
+      id: `deadline-${paper.id}`,
+      title: `Complete ${paper.title}`,
+      dueDate: new Date(Date.now() + (index + 1) * 7 * 24 * 60 * 60 * 1000), // Weekly intervals
+      paperId: paper.id,
+    }))
+    .slice(0, 3);
 
   // Get papers needing attention
-  const papersNeedingAttention = papers.filter(p => 
-    p.status === 'in-review' || p.status === 'revision' || 
-    (p.status === 'in-progress' && p.progress < 50 && 
-     Math.ceil((new Date().getTime() - p.lastModified.getTime()) / (1000 * 60 * 60 * 24)) > 7)
+  const papersNeedingAttention = safePapers.filter(p =>
+    p.status === 'in-review' || 
+    p.status === 'revision' ||
+    (p.status === 'in-progress' && p.progress < 50 &&
+      Math.ceil((new Date().getTime() - p.lastModified.getTime()) / (1000 * 60 * 60 * 24)) > 7)
   );
 
   const getStatusColor = (status: string) => {
@@ -47,16 +108,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper }) => {
       case 'revision': return 'bg-orange-100 text-orange-700';
       case 'completed': return 'bg-green-100 text-green-700';
       case 'published': return 'bg-purple-100 text-purple-700';
+      case 'archived': return 'bg-gray-100 text-gray-600';
       default: return 'bg-gray-100 text-gray-700';
     }
   };
 
   const formatTimeAgo = (date: Date) => {
     const hours = Math.ceil((new Date().getTime() - date.getTime()) / (1000 * 60 * 60));
+    if (hours < 1) return 'Just now';
     if (hours < 24) return `${hours}h ago`;
     const days = Math.ceil(hours / 24);
     if (days === 1) return 'Yesterday';
     if (days < 7) return `${days} days ago`;
+    if (days < 30) return `${Math.ceil(days / 7)} weeks ago`;
     return date.toLocaleDateString();
   };
 
@@ -68,81 +132,82 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper }) => {
   return (
     <div className="flex-1 overflow-y-auto p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Welcome Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome back!</h1>
-          <p className="text-gray-600">Here's what's happening with your research projects.</p>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Welcome back{user ? `, ${user.name}` : ''}!
+            </h1>
+            <p className="text-gray-600">Here's an overview of your research progress and activities</p>
+          </div>
+          <button
+            onClick={onNewPaper}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors"
+          >
+            <Plus size={16} />
+            New Paper
+          </button>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white p-6 rounded-lg shadow-sm border hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Active Papers</p>
-                <p className="text-3xl font-bold text-blue-600">{activePapers.length}</p>
+                <p className="text-2xl font-semibold text-gray-900">{activePapers.length}</p>
+                <p className="text-xs text-blue-600 mt-1">In progress</p>
               </div>
               <div className="p-3 bg-blue-100 rounded-full">
                 <FileText className="text-blue-600" size={24} />
               </div>
             </div>
-            <div className="mt-4 flex items-center text-sm text-green-600">
-              <TrendingUp size={16} className="mr-1" />
-              <span>{publishedPapers.length} published</span>
+          </div>
+          
+          <div className="bg-white p-6 rounded-lg shadow-sm border hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Published</p>
+                <p className="text-2xl font-semibold text-gray-900">{publishedPapers.length}</p>
+                <p className="text-xs text-green-600 mt-1">{completedPapers.length} completed</p>
+              </div>
+              <div className="p-3 bg-green-100 rounded-full">
+                <CheckCircle className="text-green-600" size={24} />
+              </div>
             </div>
           </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
+          
+          <div className="bg-white p-6 rounded-lg shadow-sm border hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Words</p>
-                <p className="text-3xl font-bold text-green-600">{totalWordCount.toLocaleString()}</p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-full">
-                <FileText className="text-green-600" size={24} />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm text-gray-500">
-              <span>Across all papers</span>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Avg Progress</p>
-                <p className="text-3xl font-bold text-purple-600">{avgProgress}%</p>
+                <p className="text-2xl font-semibold text-gray-900">{totalWordCount.toLocaleString()}</p>
+                <p className="text-xs text-purple-600 mt-1">Across all papers</p>
               </div>
               <div className="p-3 bg-purple-100 rounded-full">
                 <TrendingUp className="text-purple-600" size={24} />
               </div>
             </div>
-            <div className="mt-4 flex items-center text-sm text-gray-500">
-              <span>All active projects</span>
-            </div>
           </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
+          
+          <div className="bg-white p-6 rounded-lg shadow-sm border hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Collaborators</p>
-                <p className="text-3xl font-bold text-orange-600">
-                  {[...new Set(papers.flatMap(p => p.coAuthors))].length}
-                </p>
+                <p className="text-sm text-gray-600">Avg Progress</p>
+                <p className="text-2xl font-semibold text-gray-900">{avgProgress}%</p>
+                <p className="text-xs text-orange-600 mt-1">Overall completion</p>
               </div>
               <div className="p-3 bg-orange-100 rounded-full">
-                <Users className="text-orange-600" size={24} />
+                <Clock className="text-orange-600" size={24} />
               </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm text-gray-500">
-              <span>Unique co-authors</span>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Recent Activity */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-sm border">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
               <Clock size={18} className="text-gray-400" />
@@ -152,153 +217,137 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper }) => {
                 recentActivity.map((paper) => (
                   <div
                     key={paper.id}
-                    className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+                    className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all"
                     onClick={() => onPaperSelect(paper)}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-100 rounded">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-blue-50 rounded-lg">
                         <FileText size={16} className="text-blue-600" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="font-medium text-gray-900 truncate max-w-64">{paper.title}</p>
-                        <p className="text-sm text-gray-500">Modified {formatTimeAgo(paper.lastModified)}</p>
+                        <p className="text-sm text-gray-500">
+                          {formatTimeAgo(paper.lastModified)} • {paper.currentWordCount.toLocaleString()} words
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(paper.status)}`}>
-                        {paper.status}
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(paper.status)}`}>
+                        {paper.status.replace('-', ' ')}
                       </span>
-                      <ArrowRight size={16} className="text-gray-400" />
+                      <div className="w-8 h-2 bg-gray-200 rounded-full">
+                        <div 
+                          className="h-2 bg-blue-500 rounded-full transition-all" 
+                          style={{ width: `${paper.progress}%` }}
+                        />
+                      </div>
+                      <ArrowRight size={14} className="text-gray-400" />
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-6 text-gray-500">
+                <div className="text-center py-8 text-gray-500">
                   <FileText size={32} className="mx-auto mb-2 opacity-50" />
                   <p>No recent activity</p>
+                  <p className="text-sm">Your recent paper edits will appear here</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-            <div className="space-y-3">
-              <button
-                onClick={onNewPaper}
-                className="w-full flex items-center gap-3 p-4 text-left hover:bg-blue-50 rounded-lg border-2 border-dashed border-blue-200 transition-colors"
-              >
-                <div className="p-2 bg-blue-100 rounded">
-                  <Plus size={18} className="text-blue-600" />
-                </div>
-                <div>
-                  <p className="font-medium text-blue-900">Start New Paper</p>
-                  <p className="text-sm text-blue-600">Create a new research paper</p>
-                </div>
-              </button>
-
-              {activePapers.length > 0 && (
-                <button
-                  onClick={() => onPaperSelect(activePapers[0])}
-                  className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 rounded-lg border transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-green-100 rounded">
-                      <FileText size={18} className="text-green-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Continue Recent Work</p>
-                      <p className="text-sm text-gray-600 truncate max-w-48">{activePapers[0].title}</p>
-                    </div>
-                  </div>
-                  <ArrowRight size={16} className="text-gray-400" />
-                </button>
-              )}
-
-              <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 rounded">
-                    <TrendingUp size={18} className="text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">Research Insights</p>
-                    <p className="text-sm text-gray-600">View your analytics dashboard</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Upcoming Deadlines */}
           <div className="bg-white p-6 rounded-lg shadow-sm border">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Upcoming Deadlines</h3>
-              <Calendar size={18} className="text-gray-400" />
+              <Calendar size={18} className="text-gray-500" />
             </div>
             <div className="space-y-3">
-              {upcomingDeadlines.slice(0, 4).map((deadline) => {
-                const days = getDaysUntil(deadline.dueDate);
-                const paper = papers.find(p => p.id === deadline.paperId);
-                return (
-                  <div key={deadline.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">{deadline.title}</p>
-                      <p className="text-sm text-gray-500">{paper?.title}</p>
+              {upcomingDeadlines.length > 0 ? (
+                upcomingDeadlines.map((deadline) => {
+                  const daysUntil = getDaysUntil(deadline.dueDate);
+                  return (
+                    <div key={deadline.id} className="p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                      <p className="font-medium text-gray-900 text-sm truncate">{deadline.title}</p>
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-gray-500">
+                          {deadline.dueDate.toLocaleDateString()}
+                        </p>
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                          daysUntil <= 3 
+                            ? 'bg-red-100 text-red-700' 
+                            : daysUntil <= 7 
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-green-100 text-green-700'
+                        }`}>
+                          {daysUntil <= 0 ? 'Overdue' : `${daysUntil} days`}
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-medium ${
-                        days <= 3 ? 'text-red-600' : days <= 7 ? 'text-yellow-600' : 'text-gray-600'
-                      }`}>
-                        {days <= 0 ? 'Overdue' : `${days} days`}
-                      </p>
-                      <p className="text-xs text-gray-500">{deadline.dueDate.toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="text-center py-6 text-gray-500">
+                  <Calendar size={24} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No upcoming deadlines</p>
+                </div>
+              )}
             </div>
           </div>
+        </div>
 
-          {/* Papers Needing Attention */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border">
+        {/* Papers Needing Attention */}
+        {papersNeedingAttention.length > 0 && (
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-orange-200">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Needs Attention</h3>
               <AlertCircle size={18} className="text-orange-500" />
             </div>
             <div className="space-y-3">
-              {papersNeedingAttention.length > 0 ? (
-                papersNeedingAttention.map((paper) => (
-                  <div
-                    key={paper.id}
-                    className="flex items-center justify-between p-3 hover:bg-orange-50 rounded-lg cursor-pointer border-l-3 border-orange-200"
-                    onClick={() => onPaperSelect(paper)}
-                  >
-                    <div>
-                      <p className="font-medium text-gray-900 truncate max-w-48">{paper.title}</p>
-                      <p className="text-sm text-orange-600">
-                        {paper.status === 'in-review' ? 'Awaiting review' : 
-                         paper.status === 'revision' ? 'Needs revision' : 
-                         'Stale - no recent progress'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(paper.status)}`}>
-                        {paper.status}
-                      </span>
-                      <p className="text-xs text-gray-500 mt-1">{paper.progress}% done</p>
-                    </div>
+              {papersNeedingAttention.map((paper) => (
+                <div
+                  key={paper.id}
+                  className="flex items-center justify-between p-3 hover:bg-orange-50 rounded-lg cursor-pointer border-l-4 border-orange-200 transition-colors"
+                  onClick={() => onPaperSelect(paper)}
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 truncate max-w-48">{paper.title}</p>
+                    <p className="text-sm text-orange-600">
+                      {paper.status === 'in-review' ? 'Awaiting review feedback' :
+                        paper.status === 'revision' ? 'Needs revision based on feedback' :
+                          'No progress in over a week'}
+                    </p>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-6 text-gray-500">
-                  <CheckCircle size={32} className="mx-auto mb-2 text-green-500 opacity-50" />
-                  <p>All papers are up to date!</p>
+                  <div className="text-right flex-shrink-0">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(paper.status)}`}>
+                      {paper.status.replace('-', ' ')}
+                    </span>
+                    <p className="text-xs text-gray-500 mt-1">{paper.progress}% complete</p>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
+          </div>
+        )}
+
+        {/* Quick Actions */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button 
+              onClick={onNewPaper}
+              className="flex items-center p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border"
+            >
+              <Plus size={20} className="text-blue-600 mr-3" />
+              <span className="text-gray-700">Start New Research</span>
+            </button>
+            <button className="flex items-center p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
+              <Users size={20} className="text-green-600 mr-3" />
+              <span className="text-gray-700">Invite Collaborators</span>
+            </button>
+            <button className="flex items-center p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
+              <TrendingUp size={20} className="text-purple-600 mr-3" />
+              <span className="text-gray-700">View Analytics</span>
+            </button>
           </div>
         </div>
       </div>

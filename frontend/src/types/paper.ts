@@ -115,6 +115,8 @@ export interface PaperComment {
   replies?: PaperComment[];
 }
 
+// Export type aliases for better type safety
 export type PaperStatus = Paper['status'];
+export type SectionStatus = PaperSection['status'];  
 export type TaskStatus = Task['status'];
 export type TaskPriority = Task['priority'];

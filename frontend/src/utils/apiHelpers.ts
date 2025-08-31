@@ -1,9 +1,4 @@
 // utils/apiHelpers.ts
-export interface ApiError {
-  message: string;
-  status: number;
-  code?: string;
-}
 
 export interface ApiResponse<T> {
   data: T;
@@ -16,14 +11,46 @@ export interface ApiResponse<T> {
   };
 }
 
+export interface ApiConfig {
+  baseURL: string;
+  timeout: number;
+  headers: Record<string, string>;
+}
+
+export interface RequestInterceptor {
+  (config: RequestInit): RequestInit | Promise<RequestInit>;
+}
+
+export interface ResponseInterceptor {
+  (response: Response): Response | Promise<Response>;
+}
+
+// Single ApiError class (removed duplicate interface)
+export class ApiError extends Error {
+  public status: number;
+  public code?: string;
+  public message: string;
+
+  constructor({ message, status, code }: { message: string; status: number; code?: string }) {
+    super(message);
+    this.name = 'ApiError';
+    this.message = message;
+    this.status = status;
+    this.code = code;
+  }
+}
+
 export class ApiClient {
   private baseUrl: string;
   private defaultHeaders: HeadersInit;
+  private timeout: number;
 
-  constructor(baseUrl: string = 'http://127.0.0.1:8000/api') {
-    this.baseUrl = baseUrl;
+  constructor(config: Partial<ApiConfig> = {}) {
+    this.baseUrl = config.baseURL || 'http://127.0.0.1:8000/api';
+    this.timeout = config.timeout || 10000;
     this.defaultHeaders = {
       'Content-Type': 'application/json',
+      ...config.headers,
     };
   }
 
@@ -50,62 +77,67 @@ export class ApiClient {
     return response.text() as unknown as T;
   }
 
+  private async request<T>(method: string, endpoint: string, data?: any): Promise<T> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
+      
+      const response = await fetch(url, {
+        method,
+        headers: this.getAuthHeaders(),
+        body: data ? JSON.stringify(data) : undefined,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      return this.handleResponse<T>(response);
+    } catch (error) {
+      clearTimeout(timeoutId);
+      
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ApiError({
+          message: 'Request timeout',
+          status: 408,
+          code: 'TIMEOUT'
+        });
+      }
+      
+      throw error;
+    }
+  }
+
   async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
-    const url = new URL(`${this.baseUrl}${endpoint}`);
+    let url = endpoint;
     
     if (params) {
+      const urlObj = new URL(endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`);
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-          url.searchParams.append(key, String(value));
+          urlObj.searchParams.append(key, String(value));
         }
       });
+      url = endpoint.startsWith('http') ? urlObj.toString() : urlObj.pathname + urlObj.search;
     }
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: this.getAuthHeaders(),
-    });
-
-    return this.handleResponse<T>(response);
+    return this.request<T>('GET', url);
   }
 
   async post<T>(endpoint: string, data?: any): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: data ? JSON.stringify(data) : undefined,
-    });
-
-    return this.handleResponse<T>(response);
+    return this.request<T>('POST', endpoint, data);
   }
 
   async patch<T>(endpoint: string, data?: any): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'PATCH',
-      headers: this.getAuthHeaders(),
-      body: data ? JSON.stringify(data) : undefined,
-    });
-
-    return this.handleResponse<T>(response);
+    return this.request<T>('PATCH', endpoint, data);
   }
 
   async put<T>(endpoint: string, data?: any): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'PUT',
-      headers: this.getAuthHeaders(),
-      body: data ? JSON.stringify(data) : undefined,
-    });
-
-    return this.handleResponse<T>(response);
+    return this.request<T>('PUT', endpoint, data);
   }
 
   async delete<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'DELETE',
-      headers: this.getAuthHeaders(),
-    });
-
-    return this.handleResponse<T>(response);
+    return this.request<T>('DELETE', endpoint);
   }
 
   async upload<T>(endpoint: string, file: File, additionalData?: Record<string, any>): Promise<T> {
@@ -118,16 +150,35 @@ export class ApiClient {
       });
     }
 
-    const token = localStorage.getItem('auth_token');
-    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
+    try {
+      const token = localStorage.getItem('auth_token');
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
-    return this.handleResponse<T>(response);
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        method: 'POST',
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      return this.handleResponse<T>(response);
+    } catch (error) {
+      clearTimeout(timeoutId);
+      
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ApiError({
+          message: 'Upload timeout',
+          status: 408,
+          code: 'TIMEOUT'
+        });
+      }
+      
+      throw error;
+    }
   }
 }
 
@@ -179,26 +230,3 @@ export const retryWithBackoff = async <T>(
   
   throw lastError;
 };
-
-// Request/Response interceptors
-export interface RequestInterceptor {
-  (config: RequestInit): RequestInit | Promise<RequestInit>;
-}
-
-export interface ResponseInterceptor {
-  (response: Response): Response | Promise<Response>;
-}
-
-class ApiError extends Error {
-  public status: number;
-  public code?: string;
-
-  constructor({ message, status, code }: { message: string; status: number; code?: string }) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.code = code;
-  }
-}
-
-export { ApiError };

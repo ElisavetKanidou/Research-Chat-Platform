@@ -1,7 +1,7 @@
 // components/common/PaperCard.tsx
 import React from 'react';
 import { FileText, Clock, Users, MoreVertical } from 'lucide-react';
-import { Paper } from '../../types/paper';
+import type { Paper } from '../../types/paper';
 import { getStatusColor, formatTimeAgo } from '../../utils/statusHelpers';
 import { formatDate } from '../../utils/dateHelpers';
 

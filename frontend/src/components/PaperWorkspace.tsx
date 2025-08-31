@@ -1,17 +1,29 @@
 import React, { useState } from 'react';
-import { ArrowLeft, FileText, MessageSquare, BarChart3, Settings } from 'lucide-react';
-import { useGlobalContext } from '../App';
-import CurrentPaperComponent from './CurrentPaperComponent';
-import ResearchChatPlatform from './ResearchChatPlatform';
-import ResearchProgressComponent from './ResearchProgressComponent';
+import { ArrowLeft, FileText, MessageSquare, BarChart3 } from 'lucide-react';
+import { useGlobalContext } from '../contexts/GlobalContext';
 
-const PaperWorkspace = () => {
+import CurrentPaperComponent from '../paper/CurrentPaperComponent';
+import ResearchChatPlatform from '../paper/ResearchChatPlatform';
+import ResearchProgressComponent from '../paper/ResearchProgressComponent';
+
+interface PaperWorkspaceProps {
+  onClose?: () => void;
+}
+
+const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
   const { activePaper, setActivePaper } = useGlobalContext();
   const [workspaceTab, setWorkspaceTab] = useState<'paper' | 'chat' | 'progress'>('paper');
 
+  const handleBack = () => {
+    setActivePaper(null);
+    if (onClose) {
+      onClose();
+    }
+  };
+
   if (!activePaper) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center p-6">
         <div className="text-center">
           <FileText size={64} className="mx-auto text-gray-300 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No paper selected</h3>
@@ -21,54 +33,40 @@ const PaperWorkspace = () => {
     );
   }
 
+  const lastModified = activePaper.lastModified instanceof Date 
+    ? activePaper.lastModified 
+    : new Date(activePaper.lastModified);
+
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col h-full">
       {/* Workspace Header */}
-      <div className="bg-white border-b p-4">
+      <div className="bg-white border-b p-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => setActivePaper(null)}
+              onClick={handleBack}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               title="Back to Papers"
             >
               <ArrowLeft size={20} className="text-gray-600" />
             </button>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900 truncate max-w-96">
+              <h1 className="text-xl font-semibold text-gray-900 truncate max-w-md lg:max-w-xl">
                 {activePaper.title}
               </h1>
               <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
                 <span className="capitalize">{activePaper.status.replace('-', ' ')}</span>
                 <span>{activePaper.progress}% complete</span>
                 <span>{activePaper.currentWordCount.toLocaleString()} words</span>
-                <span>Modified {activePaper.lastModified.toLocaleDateString()}</span>
+                <span>Modified {lastModified.toLocaleDateString()}</span>
               </div>
-            </div>
-          </div>
-          
-          {/* Paper-specific quick stats */}
-          <div className="flex items-center gap-6 text-sm">
-            <div className="text-center">
-              <div className="text-lg font-bold text-blue-600">{activePaper.progress}%</div>
-              <div className="text-xs text-gray-500">Progress</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-green-600">
-                {Math.round((activePaper.currentWordCount / activePaper.targetWordCount) * 100)}%
-              </div>
-              <div className="text-xs text-gray-500">Words</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-purple-600">{activePaper.coAuthors.length}</div>
-              <div className="text-xs text-gray-500">Authors</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Workspace Tabs */}
-      <div className="bg-white border-b">
+      <div className="bg-white border-b flex-shrink-0">
         <div className="flex">
           <button
             onClick={() => setWorkspaceTab('paper')}
@@ -109,17 +107,17 @@ const PaperWorkspace = () => {
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
         {workspaceTab === 'paper' && (
-          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          <div className="h-full overflow-y-auto p-6 bg-gray-50">
             <CurrentPaperComponent />
           </div>
         )}
         {workspaceTab === 'chat' && (
-          <div className="flex-1 overflow-hidden">
+          <div className="h-full overflow-hidden">
             <ResearchChatPlatform paperContext={activePaper} />
           </div>
         )}
         {workspaceTab === 'progress' && (
-          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          <div className="h-full overflow-y-auto p-6 bg-gray-50">
             <ResearchProgressComponent paperId={activePaper.id} />
           </div>
         )}

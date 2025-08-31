@@ -1,6 +1,6 @@
 // services/analyticsService.ts
 import { apiClient } from '../utils/apiHelpers';
-import { 
+import type { 
   UserAnalytics, 
   PaperAnalytics, 
   ProductivityMetrics, 
@@ -12,7 +12,7 @@ import {
   ComparisonMetric,
   AnalyticsTimeframe 
 } from '../types/analytics';
-import { AnalyticsResponse, AnalyticsRequest } from '../types/api';
+import type { AnalyticsResponse, AnalyticsRequest } from '../types/api';
 
 class AnalyticsService {
   private readonly basePath = '/analytics';
@@ -104,7 +104,7 @@ class AnalyticsService {
   // Export analytics data
   async exportAnalytics(format: 'csv' | 'json' | 'pdf', filter: AnalyticsFilter): Promise<Blob> {
     try {
-      const response = await fetch(`${apiClient['baseUrl']}${this.basePath}/export`, {
+      const response = await fetch(`${(apiClient as any).baseUrl}${this.basePath}/export`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,260 +1,265 @@
-// App.tsx - Complete Main Application
-import React from 'react';
-import { ThemeProvider } from './contexts/ThemeContext';
-import { UserProvider } from './contexts/UserContext';
-import ResearchPlatform from './components/ResearchPlatform';
-import './styles/globals.css';
-
-function App() {
-  return (
-    <ThemeProvider>
-      <UserProvider>
-        <div className="App">
-          <ResearchPlatform />
-        </div>
-      </UserProvider>
-    </ThemeProvider>
-  );
-}
-
-export default App;
-
-// components/ResearchPlatform.tsx - Updated Main Platform Component
+// components/App.tsx
 import React, { useState } from 'react';
-import { Home, FileText, MessageSquare, BarChart3, Settings, Plus } from 'lucide-react';
-import { usePaperManagement } from '../hooks/usePaperManagement';
-import { useUser } from '../contexts/UserContext';
+import { GlobalProvider, useGlobalContext } from '../contexts/GlobalContext';
+import type { Paper } from '../types/paper';
 import Dashboard from './Dashboard';
 import PapersManagement from './PapersManagement';
-import ResearchChatPlatform from './paper/ResearchChatPlatform';
 import Analytics from './Analytics';
 import SettingsPanel from './SettingsPanel';
 import PaperWorkspace from './PaperWorkspace';
-import { LoadingSpinner } from './common/LoadingSpinner';
+import { Bell, Search, Menu, X } from 'lucide-react';
 
-const ResearchPlatform = () => {
-  const [activeSection, setActiveSection] = useState<'dashboard' | 'papers' | 'chat' | 'analytics' | 'settings' | 'workspace'>('dashboard');
-  const { isAuthenticated, user } = useUser();
+type ViewType = 'dashboard' | 'papers' | 'workspace' | 'analytics' | 'settings';
+
+// Notification Component
+const NotificationCenter: React.FC = () => {
+  const { notifications, removeNotification } = useGlobalContext();
+
+  if (notifications.length === 0) return null;
+
+  return (
+    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+      {notifications.map((notification) => (
+        <div
+          key={notification.id}
+          className={`p-4 rounded-lg shadow-lg border ${
+            notification.type === 'success' ? 'bg-green-50 border-green-200' :
+            notification.type === 'error' ? 'bg-red-50 border-red-200' :
+            notification.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
+            'bg-blue-50 border-blue-200'
+          }`}
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <h4 className={`font-medium text-sm ${
+                notification.type === 'success' ? 'text-green-800' :
+                notification.type === 'error' ? 'text-red-800' :
+                notification.type === 'warning' ? 'text-yellow-800' :
+                'text-blue-800'
+              }`}>
+                {notification.title}
+              </h4>
+              <p className={`text-sm mt-1 ${
+                notification.type === 'success' ? 'text-green-600' :
+                notification.type === 'error' ? 'text-red-600' :
+                notification.type === 'warning' ? 'text-yellow-600' :
+                'text-blue-600'
+              }`}>
+                {notification.message}
+              </p>
+            </div>
+            <button
+              onClick={() => removeNotification(notification.id)}
+              className="ml-2 text-gray-400 hover:text-gray-600"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Main Research Platform component
+const ResearchPlatform: React.FC = () => {
+  const [currentView, setCurrentView] = useState<ViewType>('dashboard');
+  
   const {
-    papers,
-    activePaper,
-    loading,
-    error,
+    user,
+    searchQuery,
+    setSearchQuery,
+    searchResults,
     createPaper,
-    updatePaper,
-    deletePaper,
-    selectPaper,
-  } = usePaperManagement();
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    theme,
+    setTheme,
+    setActivePaper,
+  } = useGlobalContext();
 
-  // Mock authentication for development
-  React.useEffect(() => {
-    if (!isAuthenticated) {
-      // Auto-login for development
-      // In production, this would redirect to login page
-    }
-  }, [isAuthenticated]);
-
-  const handlePaperSelect = (paper: any) => {
-    selectPaper(paper);
-    setActiveSection('workspace');
+  // Handle paper selection
+  const handlePaperSelect = (paper: Paper) => {
+    setActivePaper(paper);
+    setCurrentView('workspace');
   };
 
+  // Handle new paper creation
   const handleNewPaper = async () => {
     try {
       const newPaper = await createPaper({
         title: 'Untitled Research Paper',
-        researchArea: '',
+        researchArea: 'General',
+        targetWordCount: 8000,
       });
-      selectPaper(newPaper);
-      setActiveSection('workspace');
+      setActivePaper(newPaper);
+      setCurrentView('workspace');
     } catch (error) {
-      console.error('Error creating new paper:', error);
+      console.error('Failed to create new paper:', error);
     }
   };
 
-  const navigateToSection = (section: typeof activeSection) => {
-    if (section === 'workspace' && !activePaper) {
-      setActiveSection('papers');
-      return;
-    }
-    setActiveSection(section);
-  };
+  // Navigation items
+  const navigationItems = [
+    { key: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { key: 'papers', label: 'Papers', icon: '📄' },
+    { key: 'analytics', label: 'Analytics', icon: '📈' },
+    { key: 'settings', label: 'Settings', icon: '⚙️' },
+  ];
 
-  const renderContent = () => {
-    if (loading && papers.length === 0) {
-      return (
-        <div className="flex-1 flex items-center justify-center">
-          <LoadingSpinner size="lg" text="Loading your research workspace..." />
-        </div>
-      );
-    }
-
-    if (error) {
-      return (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-red-600 mb-4">⚠️</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Data</h3>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    switch (activeSection) {
+  // Render current view
+  const renderCurrentView = () => {
+    switch (currentView) {
       case 'dashboard':
-        return <Dashboard onPaperSelect={handlePaperSelect} onNewPaper={handleNewPaper} />;
+        return (
+          <Dashboard
+            onPaperSelect={handlePaperSelect}
+            onNewPaper={handleNewPaper}
+          />
+        );
       case 'papers':
-        return <PapersManagement onPaperSelect={handlePaperSelect} onNewPaper={handleNewPaper} />;
-      case 'chat':
-        return <ResearchChatPlatform />;
+        return (
+          <PapersManagement 
+            onPaperSelect={handlePaperSelect}
+            onNewPaper={handleNewPaper}
+          />
+        );
+      case 'workspace':
+        return <PaperWorkspace onClose={() => setCurrentView('dashboard')} />;
       case 'analytics':
         return <Analytics />;
       case 'settings':
         return <SettingsPanel />;
-      case 'workspace':
-        return activePaper ? <PaperWorkspace /> : <PapersManagement onPaperSelect={handlePaperSelect} onNewPaper={handleNewPaper} />;
       default:
         return <Dashboard onPaperSelect={handlePaperSelect} onNewPaper={handleNewPaper} />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar Navigation */}
-      <div className="w-80 bg-white shadow-lg flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b">
-          <h1 className="text-xl font-bold text-gray-900">ResearchHub</h1>
-          <p className="text-sm text-gray-600">Comprehensive Research Management</p>
-          {user && (
-            <div className="mt-2 text-xs text-gray-500">
-              Welcome back, {user.name}
+    <div className={`min-h-screen ${theme === 'dark' ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+      {/* Header */}
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Left side */}
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <Menu size={20} />
+              </button>
+              <div className="flex items-center">
+                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Research Platform</h1>
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* Navigation Menu */}
-        <nav className="flex-1 p-6">
-          <div className="space-y-2">
-            <button
-              onClick={() => navigateToSection('dashboard')}
-              className={`w-full flex items-center gap-3 p-3 text-left rounded-lg transition-colors ${
-                activeSection === 'dashboard' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-50'
-              }`}
-            >
-              <Home size={20} />
-              <span>Dashboard</span>
-            </button>
-
-            <button
-              onClick={() => navigateToSection('papers')}
-              className={`w-full flex items-center gap-3 p-3 text-left rounded-lg transition-colors ${
-                activeSection === 'papers' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-50'
-              }`}
-            >
-              <FileText size={20} />
-              <div className="flex items-center justify-between flex-1">
-                <span>Papers Management</span>
-                {papers.length > 0 && (
-                  <span className="text-xs bg-gray-200 px-2 py-1 rounded-full">
-                    {papers.length}
-                  </span>
+            {/* Center - Search */}
+            <div className="flex-1 max-w-lg mx-8">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search papers, collaborators, or content..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                />
+                {searchResults.length > 0 && searchQuery && (
+                  <div className="absolute top-full mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+                    {searchResults.map((paper) => (
+                      <button
+                        key={paper.id}
+                        onClick={() => {
+                          handlePaperSelect(paper);
+                          setSearchQuery('');
+                        }}
+                        className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-600 last:border-b-0"
+                      >
+                        <div className="font-medium text-gray-900 dark:text-white truncate">{paper.title}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">{paper.researchArea}</div>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
-            </button>
+            </div>
 
-            {activePaper && (
-              <div className="ml-4 mt-2">
+            {/* Right side */}
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                {theme === 'light' ? '🌙' : '☀️'}
+              </button>
+              
+              <button className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 relative">
+                <Bell size={20} />
+                <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">
+                  3
+                </span>
+              </button>
+              
+              {user && (
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 hidden sm:block">
+                    {user.name}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex h-[calc(100vh-4rem)]">
+        {/* Sidebar */}
+        <nav className={`bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 ${
+          sidebarCollapsed ? 'w-16' : 'w-64'
+        }`}>
+          <div className="p-4">
+            <div className="space-y-2">
+              {navigationItems.map((item) => (
                 <button
-                  onClick={() => navigateToSection('workspace')}
-                  className={`w-full flex items-center gap-3 p-2 text-left rounded-lg transition-colors text-sm ${
-                    activeSection === 'workspace' ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-50 text-gray-600'
+                  key={item.key}
+                  onClick={() => setCurrentView(item.key as ViewType)}
+                  className={`w-full flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    currentView === item.key
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                      : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                   }`}
                 >
-                  <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                  <span className="truncate">{activePaper.title}</span>
+                  <span className="text-lg mr-3">{item.icon}</span>
+                  {!sidebarCollapsed && <span>{item.label}</span>}
                 </button>
-              </div>
-            )}
-
-            <button
-              onClick={() => navigateToSection('chat')}
-              className={`w-full flex items-center gap-3 p-3 text-left rounded-lg transition-colors ${
-                activeSection === 'chat' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-50'
-              }`}
-            >
-              <MessageSquare size={20} />
-              <span>AI Research Assistant</span>
-            </button>
-
-            <button
-              onClick={() => navigateToSection('analytics')}
-              className={`w-full flex items-center gap-3 p-3 text-left rounded-lg transition-colors ${
-                activeSection === 'analytics' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-50'
-              }`}
-            >
-              <BarChart3 size={20} />
-              <span>Analytics & Insights</span>
-            </button>
-
-            <button
-              onClick={() => navigateToSection('settings')}
-              className={`w-full flex items-center gap-3 p-3 text-left rounded-lg transition-colors ${
-                activeSection === 'settings' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-50'
-              }`}
-            >
-              <Settings size={20} />
-              <span>Settings</span>
-            </button>
+              ))}
+            </div>
           </div>
         </nav>
 
-        {/* Quick Actions */}
-        <div className="p-6 border-t">
-          <button
-            onClick={handleNewPaper}
-            className="w-full flex items-center justify-center gap-2 p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            disabled={loading}
-          >
-            <Plus size={20} />
-            <span>New Paper</span>
-          </button>
-          
-          {activePaper && (
-            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-              <div className="text-xs text-gray-500 mb-1">Active Paper</div>
-              <div className="text-sm font-medium text-gray-900 truncate">{activePaper.title}</div>
-              <div className="text-xs text-gray-500 mt-1">{activePaper.progress}% complete</div>
-              <div className="w-full bg-gray-200 rounded-full h-1 mt-1">
-                <div
-                  className="bg-blue-500 h-1 rounded-full transition-all duration-300"
-                  style={{ width: `${activePaper.progress}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {papers.length > 0 && (
-            <div className="mt-3 text-xs text-gray-500 text-center">
-              Total: {papers.length} papers • {papers.reduce((sum, p) => sum + p.currentWordCount, 0).toLocaleString()} words
-            </div>
-          )}
-        </div>
+        {/* Main content */}
+        <main className="flex-1 overflow-hidden">
+          {renderCurrentView()}
+        </main>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-hidden">
-        {renderContent()}
-      </div>
+      {/* Notifications */}
+      <NotificationCenter />
     </div>
   );
 };
 
-export default ResearchPlatform;
+// Main App component with context providers
+const App: React.FC = () => {
+  return (
+    <GlobalProvider>
+      <ResearchPlatform />
+    </GlobalProvider>
+  );
+};
+
+export default App;

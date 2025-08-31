@@ -1,9 +1,24 @@
+// components/PapersManagement.tsx
 import React, { useState } from 'react';
-import { Search, Filter, Plus, FileText, Clock, Users, Calendar, MoreVertical, Archive, Trash2, Edit, Copy } from 'lucide-react';
-import { useGlobalContext } from '../App';
+import { useGlobalContext } from '../contexts/GlobalContext';
+import type { Paper } from '../types/paper';
+
+// ADDED: Imports for all used icons
+import { 
+  FileText, 
+  MoreVertical, 
+  Edit, 
+  Copy, 
+  Archive, 
+  Trash2, 
+  Clock, 
+  Users, 
+  Plus, 
+  Search 
+} from 'lucide-react';
 
 interface PapersManagementProps {
-  onPaperSelect: (paper: any) => void;
+  onPaperSelect: (paper: Paper) => void;
   onNewPaper: () => void;
 }
 
@@ -12,7 +27,8 @@ type FilterStatus = 'all' | 'draft' | 'in-progress' | 'in-review' | 'revision' |
 type SortBy = 'lastModified' | 'created' | 'title' | 'progress';
 
 const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNewPaper }) => {
-  const { papers, updatePaper, deletePaper } = useGlobalContext();
+  // FIX: Added createPaper to use for duplication
+  const { papers, updatePaper, deletePaper, createPaper } = useGlobalContext();
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
@@ -55,11 +71,17 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
       return matchesSearch && matchesFilter;
     })
     .sort((a, b) => {
+      // Ensure dates are valid before comparing
+      const dateA = a.lastModified instanceof Date ? a.lastModified : new Date(a.lastModified);
+      const dateB = b.lastModified instanceof Date ? b.lastModified : new Date(b.lastModified);
+      const createdA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+      const createdB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+
       switch (sortBy) {
         case 'lastModified':
-          return b.lastModified.getTime() - a.lastModified.getTime();
+          return dateB.getTime() - dateA.getTime();
         case 'created':
-          return b.createdAt.getTime() - a.createdAt.getTime();
+          return createdB.getTime() - createdA.getTime();
         case 'title':
           return a.title.localeCompare(b.title);
         case 'progress':
@@ -69,20 +91,21 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
       }
     });
 
-  const handleDuplicatePaper = (paper: any) => {
-    const newPaper = {
-      ...paper,
-      id: Date.now().toString(),
-      title: `${paper.title} (Copy)`,
-      status: 'draft' as const,
-      createdAt: new Date(),
-      lastModified: new Date(),
-      progress: 0,
-      currentWordCount: 0
-    };
-    // This would call addPaper from context
-    console.log('Duplicate paper:', newPaper);
-    setShowDropdown(null);
+  // FIX: Implemented duplication functionality using createPaper from context
+  const handleDuplicatePaper = async (paper: Paper) => {
+    try {
+      await createPaper({
+        ...paper,
+        title: `${paper.title} (Copy)`,
+        status: 'draft',
+        progress: 0,
+        currentWordCount: 0,
+      });
+    } catch (error) {
+      console.error("Failed to duplicate paper:", error);
+    } finally {
+      setShowDropdown(null);
+    }
   };
 
   const handleArchivePaper = (paperId: string) => {
@@ -97,7 +120,7 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
     setShowDropdown(null);
   };
 
-  const PaperCard = ({ paper }: { paper: any }) => (
+  const PaperCard = ({ paper }: { paper: Paper }) => (
     <div className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow">
       <div className="p-6">
         <div className="flex items-start justify-between mb-4">
@@ -119,13 +142,13 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
           </div>
           <div className="relative">
             <button
-              onClick={() => setShowDropdown(showDropdown === paper.id ? null : paper.id)}
+              onClick={(e) => { e.stopPropagation(); setShowDropdown(showDropdown === paper.id ? null : paper.id); }}
               className="p-1 hover:bg-gray-100 rounded-full"
             >
               <MoreVertical size={16} className="text-gray-400" />
             </button>
             {showDropdown === paper.id && (
-              <div className="absolute right-0 top-8 bg-white border rounded-lg shadow-lg py-2 w-48 z-10">
+              <div className="absolute right-0 top-8 bg-white border rounded-lg shadow-lg py-2 w-48 z-10" onClick={e => e.stopPropagation()}>
                 <button
                   onClick={() => onPaperSelect(paper)}
                   className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
@@ -180,7 +203,7 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
           </div>
           <div className="flex items-center gap-2">
             <Clock size={14} />
-            <span>Modified {paper.lastModified.toLocaleDateString()}</span>
+            <span>Modified {(paper.lastModified instanceof Date ? paper.lastModified : new Date(paper.lastModified)).toLocaleDateString()}</span>
           </div>
           {paper.coAuthors.length > 0 && (
             <div className="flex items-center gap-2">
@@ -202,7 +225,7 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
     </div>
   );
 
-  const PaperListItem = ({ paper }: { paper: any }) => (
+  const PaperListItem = ({ paper }: { paper: Paper }) => (
     <div className="bg-white border rounded-lg p-4 hover:shadow-sm transition-shadow">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 flex-1">
@@ -222,7 +245,7 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
               </span>
               <span>{paper.researchArea}</span>
               <span>{paper.currentWordCount.toLocaleString()} words</span>
-              <span>Modified {paper.lastModified.toLocaleDateString()}</span>
+              <span>Modified {(paper.lastModified instanceof Date ? paper.lastModified : new Date(paper.lastModified)).toLocaleDateString()}</span>
             </div>
           </div>
         </div>
@@ -238,13 +261,13 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
           </div>
           <div className="relative">
             <button
-              onClick={() => setShowDropdown(showDropdown === paper.id ? null : paper.id)}
+              onClick={(e) => { e.stopPropagation(); setShowDropdown(showDropdown === paper.id ? null : paper.id); }}
               className="p-2 hover:bg-gray-100 rounded-full"
             >
               <MoreVertical size={16} className="text-gray-400" />
             </button>
             {showDropdown === paper.id && (
-              <div className="absolute right-0 top-10 bg-white border rounded-lg shadow-lg py-2 w-48 z-10">
+              <div className="absolute right-0 top-10 bg-white border rounded-lg shadow-lg py-2 w-48 z-10" onClick={e => e.stopPropagation()}>
                 <button
                   onClick={() => onPaperSelect(paper)}
                   className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
@@ -341,13 +364,13 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
               <div className="flex border border-gray-300 rounded-lg">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`px-3 py-2 ${viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'text-gray-600'}`}
+                  className={`px-3 py-2 rounded-l-lg ${viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'text-gray-600'}`}
                 >
                   Grid
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`px-3 py-2 ${viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'text-gray-600'}`}
+                  className={`px-3 py-2 rounded-r-lg ${viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'text-gray-600'}`}
                 >
                   List
                 </button>
@@ -400,7 +423,7 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
                   Total words: {filteredPapers.reduce((sum, p) => sum + p.currentWordCount, 0).toLocaleString()}
                 </span>
                 <span>
-                  Avg progress: {Math.round(filteredPapers.reduce((sum, p) => sum + p.progress, 0) / filteredPapers.length)}%
+                  Avg progress: {filteredPapers.length > 0 ? Math.round(filteredPapers.reduce((sum, p) => sum + p.progress, 0) / filteredPapers.length) : 0}%
                 </span>
               </div>
             </div>

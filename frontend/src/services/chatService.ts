@@ -1,6 +1,6 @@
 // services/chatService.ts
 
-import { Paper } from '../types/paper';
+import type { Paper } from '../types/paper';
 
 export interface ChatMessage {
   id: string;
