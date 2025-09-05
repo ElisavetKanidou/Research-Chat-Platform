@@ -1,38 +1,113 @@
-# backend/app/main.py
-
-from fastapi import FastAPI
+"""
+Research Platform API - Main FastAPI Application
+"""
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from .api import chat
-from .db.database import engine, Base
+from fastapi.responses import JSONResponse
+import uvicorn
+import logging
+from contextlib import asynccontextmanager
 
-# Δημιουργεί τους πίνακες στη βάση δεδομένων (αν δεν υπάρχουν)
-# Σε παραγωγικό περιβάλλον, αυτό γίνεται συνήθως με εργαλεία όπως το Alembic
-Base.metadata.create_all(bind=engine)
+from app.api.router import api_router
+from app.core.config import settings
+from app.core.exceptions import ResearchPlatformException
+from app.database.connection import engine
+from app.models.base import Base
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events"""
+    # Startup
+    logger.info("Starting up Research Platform API...")
+
+    # Create database tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    logger.info("Database tables created successfully")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down Research Platform API...")
+
+
+# Create FastAPI application
 app = FastAPI(
-    title="ResearchChat-AI API",
-    description="API for the AI-powered personalized research assistant.",
-    version="0.1.0"
+    title="Research Platform API",
+    description="Comprehensive academic research management platform with AI assistance",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
-# Ρύθμιση CORS για να επιτρέπεται η επικοινωνία από το frontend (React)
-origins = [
-    "http://localhost:5173", # Η default διεύθυνση του Vite dev server
-    "http://localhost:3000", # Η default διεύθυνση του Create React App
-]
-
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Ενσωμάτωση του router για το chat
-app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 
-@app.get("/", tags=["Root"])
-def read_root():
-    """Ένα απλό endpoint για να ελέγξεις αν ο server λειτουργεί."""
-    return {"status": "ResearchChat-AI API is running!"}
+# Global exception handler
+@app.exception_handler(ResearchPlatformException)
+async def research_platform_exception_handler(request: Request, exc: ResearchPlatformException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "error": {
+                "code": exc.error_code,
+                "message": exc.message,
+                "details": exc.details
+            },
+            "timestamp": exc.timestamp.isoformat()
+        }
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "An unexpected error occurred",
+                "details": str(exc) if settings.DEBUG else None
+            }
+        }
+    )
+
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "Research Platform API",
+        "version": "1.0.0"
+    }
+
+
+# Include API router
+app.include_router(api_router, prefix="/api")
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.DEBUG,
+        log_level="info"
+    )
