@@ -39,6 +39,7 @@ interface GlobalContextType {
   deletePaper: (paperId: string) => Promise<void>;
   setActivePaper: (paper: Paper | null) => void;
   refreshActivePaper: () => Promise<void>; 
+  refreshPapers: () => Promise<void>;
   
   // User management
   user: User | null;
@@ -315,7 +316,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const updatePaperWithNotification = async (paperId: string, updates: Partial<Paper>): Promise<Paper> => {
     try {
       const paper = await paperManagement.updatePaper(paperId, updates);
-      
+      await refreshPapers();
       if (settings.enableNotifications) {
         addNotification({
           type: 'success',
@@ -433,19 +434,26 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  // Μετά το refreshActivePaper (γραμμή ~395)
+  const refreshPapers = async () => {
+    await paperManagement.loadPapers();
+  };
+
   const contextValue: GlobalContextType = {
     // Paper management
     papers: paperManagement.papers,
     activePaper: paperManagement.activePaper,
     loading: paperManagement.loading,
     error: paperManagement.error,
-    refreshActivePaper,
+   
     
     // Enhanced paper operations
     createPaper: createPaperWithNotification,
     updatePaper: updatePaperWithNotification,
     deletePaper: deletePaperWithNotification,
     setActivePaper: setActivePaperEnhanced,
+    refreshActivePaper,
+    refreshPapers,
     
     // User management
     user,

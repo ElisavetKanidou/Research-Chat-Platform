@@ -5,7 +5,7 @@ import type { PaperSection } from '../types/paper';
 import { paperService } from '../services/paperService';
 
 const CurrentPaperComponent: React.FC = () => {
-  const { activePaper, updatePaper, addNotification, refreshActivePaper } = useGlobalContext();
+  const { activePaper, updatePaper, addNotification, refreshActivePaper, refreshPapers } = useGlobalContext();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(activePaper?.title || '');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
@@ -100,7 +100,8 @@ const CurrentPaperComponent: React.FC = () => {
 
       // ✅ Auto-refresh
       await refreshActivePaper();
-      
+      await refreshPapers();
+
       addNotification({
         type: 'success',
         title: 'Section Updated',
