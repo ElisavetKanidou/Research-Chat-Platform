@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { FileText, Save, Download, Edit3, Calendar, Users, Target } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import type { PaperSection } from '../types/paper';
+import { paperService } from '../services/paperService';
 
 const CurrentPaperComponent: React.FC = () => {
-  const { activePaper, updatePaper, addNotification } = useGlobalContext();
+  const { activePaper, updatePaper, addNotification, refreshActivePaper } = useGlobalContext();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(activePaper?.title || '');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  
 
   if (!activePaper) {
     return (
@@ -20,10 +22,38 @@ const CurrentPaperComponent: React.FC = () => {
     );
   }
 
-  // Fix: Define lastModified variable
-  const lastModified = activePaper.lastModified instanceof Date 
-    ? activePaper.lastModified 
-    : new Date(activePaper.lastModified);
+  // Helper functions for safe field access
+  const getLastModified = () => {
+    const date = (activePaper as any).updated_at || activePaper.lastModified || activePaper.createdAt;
+    return date instanceof Date ? date : new Date(date);
+  };
+
+  const getCurrentWordCount = () => {
+    return (activePaper as any).current_word_count || activePaper.currentWordCount || 0;
+  };
+
+  const getTargetWordCount = () => {
+    return (activePaper as any).target_word_count || activePaper.targetWordCount || 8000;
+  };
+
+  const getResearchArea = () => {
+    return (activePaper as any).research_area || activePaper.researchArea || '';
+  };
+
+  const getCoAuthors = (): string[] => {
+    return (activePaper as any).co_authors || activePaper.coAuthors || [];
+  };
+
+  const getSections = (): PaperSection[] => {
+    return activePaper.sections || [];
+  };
+
+  const lastModified = getLastModified();
+  const currentWordCount = getCurrentWordCount();
+  const targetWordCount = getTargetWordCount();
+  const researchArea = getResearchArea();
+  const coAuthors = getCoAuthors();
+  const sections = getSections();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -62,24 +92,15 @@ const CurrentPaperComponent: React.FC = () => {
       });
     }
   };
-
   const updateSectionStatus = async (sectionId: string, newStatus: PaperSection['status']) => {
     try {
-      const updatedSections = activePaper.sections.map(section =>
-        section.id === sectionId
-          ? { ...section, status: newStatus, lastModified: new Date() }
-          : section
-      );
-
-      // Calculate new progress
-      const completedSections = updatedSections.filter(s => s.status === 'completed').length;
-      const newProgress = Math.round((completedSections / updatedSections.length) * 100);
-
-      await updatePaper(activePaper.id, {
-        sections: updatedSections,
-        progress: newProgress,
+      await paperService.updateSection(activePaper.id, sectionId, { 
+        status: newStatus 
       });
 
+      // ✅ Auto-refresh
+      await refreshActivePaper();
+      
       addNotification({
         type: 'success',
         title: 'Section Updated',
@@ -87,6 +108,7 @@ const CurrentPaperComponent: React.FC = () => {
         autoRemove: true,
       });
     } catch (error) {
+      console.error('Failed to update section:', error);
       addNotification({
         type: 'error',
         title: 'Update Failed',
@@ -98,6 +120,7 @@ const CurrentPaperComponent: React.FC = () => {
   const updateAbstract = async (newAbstract: string) => {
     try {
       await updatePaper(activePaper.id, { abstract: newAbstract });
+      await refreshActivePaper(); // ← ΠΡΟΣΘΗΚΗ
     } catch (error) {
       console.error('Failed to update abstract:', error);
     }
@@ -106,16 +129,17 @@ const CurrentPaperComponent: React.FC = () => {
   const updateResearchArea = async (newArea: string) => {
     try {
       await updatePaper(activePaper.id, { researchArea: newArea });
+      await refreshActivePaper(); // ← ΠΡΟΣΘΗΚΗ
     } catch (error) {
       console.error('Failed to update research area:', error);
     }
   };
 
   const addCoAuthor = async (authorName: string) => {
-    if (authorName.trim() && !activePaper.coAuthors.includes(authorName.trim())) {
+    if (authorName.trim() && !coAuthors.includes(authorName.trim())) {
       try {
         await updatePaper(activePaper.id, {
-          coAuthors: [...activePaper.coAuthors, authorName.trim()]
+          coAuthors: [...coAuthors, authorName.trim()]
         });
       } catch (error) {
         console.error('Failed to add co-author:', error);
@@ -125,7 +149,7 @@ const CurrentPaperComponent: React.FC = () => {
 
   const removeCoAuthor = async (index: number) => {
     try {
-      const newCoAuthors = activePaper.coAuthors.filter((_, i) => i !== index);
+      const newCoAuthors = coAuthors.filter((_, i) => i !== index);
       await updatePaper(activePaper.id, { coAuthors: newCoAuthors });
     } catch (error) {
       console.error('Failed to remove co-author:', error);
@@ -207,7 +231,7 @@ const CurrentPaperComponent: React.FC = () => {
               </span>
               <span className="flex items-center gap-1">
                 <FileText size={14} />
-                {activePaper.currentWordCount} / {activePaper.targetWordCount} words
+                {currentWordCount} / {targetWordCount} words
               </span>
               <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(activePaper.status)}`}>
                 {activePaper.status.replace('-', ' ').toUpperCase()}
@@ -249,24 +273,24 @@ const CurrentPaperComponent: React.FC = () => {
         {/* Quick Stats */}
         <div className="grid grid-cols-4 gap-4 text-center">
           <div className="p-3 bg-gray-50 rounded-lg">
-            <div className="text-lg font-semibold text-gray-900">{activePaper.sections.length}</div>
+            <div className="text-lg font-semibold text-gray-900">{sections.length}</div>
             <div className="text-xs text-gray-600">Total Sections</div>
           </div>
           <div className="p-3 bg-green-50 rounded-lg">
             <div className="text-lg font-semibold text-green-600">
-              {activePaper.sections.filter(s => s.status === 'completed').length}
+              {sections.filter(s => s.status === 'completed').length}
             </div>
             <div className="text-xs text-gray-600">Completed</div>
           </div>
           <div className="p-3 bg-yellow-50 rounded-lg">
             <div className="text-lg font-semibold text-yellow-600">
-              {activePaper.sections.filter(s => s.status === 'in-progress').length}
+              {sections.filter(s => s.status === 'in-progress').length}
             </div>
             <div className="text-xs text-gray-600">In Progress</div>
           </div>
           <div className="p-3 bg-gray-50 rounded-lg">
             <div className="text-lg font-semibold text-gray-600">
-              {activePaper.sections.filter(s => s.status === 'not-started').length}
+              {sections.filter(s => s.status === 'not-started').length}
             </div>
             <div className="text-xs text-gray-600">Not Started</div>
           </div>
@@ -276,54 +300,61 @@ const CurrentPaperComponent: React.FC = () => {
       {/* Sections List */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Paper Sections</h3>
-        <div className="space-y-3">
-          {activePaper.sections
-            .sort((a, b) => a.order - b.order)
-            .map((section) => {
-              const progress = section.wordCount > 0 ? Math.min((section.wordCount / (activePaper.targetWordCount / activePaper.sections.length)) * 100, 100) : 0;
-              
-              return (
-                <div
-                  key={section.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                  onClick={() => setSelectedSection(selectedSection === section.id ? null : section.id)}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg">{getStatusIcon(section.status)}</span>
-                    <div>
-                      <h4 className="font-medium text-gray-900">{section.title}</h4>
-                      <p className="text-sm text-gray-600">
-                        {section.wordCount} words • Last modified: {section.lastModified instanceof Date ? section.lastModified.toLocaleDateString() : new Date(section.lastModified).toLocaleDateString()}
-                      </p>
+        {sections.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            No sections available. Add sections to get started.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sections
+              .sort((a, b) => a.order - b.order)
+              .map((section) => {
+                const sectionTargetWords = sections.length > 0 ? targetWordCount / sections.length : 0;
+                const progress = section.wordCount > 0 ? Math.min((section.wordCount / sectionTargetWords) * 100, 100) : 0;
+                
+                return (
+                  <div
+                    key={section.id}
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                    onClick={() => setSelectedSection(selectedSection === section.id ? null : section.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg">{getStatusIcon(section.status)}</span>
+                      <div>
+                        <h4 className="font-medium text-gray-900">{section.title}</h4>
+                        <p className="text-sm text-gray-600">
+                          {section.wordCount} words • Last modified: {section.lastModified instanceof Date ? section.lastModified.toLocaleDateString() : new Date(section.lastModified).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(section.status)}`}>
+                        {section.status.replace('-', ' ')}
+                      </span>
+                      <select
+                        value={section.status}
+                        onChange={(e) => updateSectionStatus(section.id, e.target.value as PaperSection['status'])}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-sm border rounded px-2 py-1"
+                      >
+                        <option value="not-started">Not Started</option>
+                        <option value="in-progress">In Progress</option>
+                        <option value="needs-review">Needs Review</option>
+                        <option value="completed">Completed</option>
+                      </select>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(section.status)}`}>
-                      {section.status.replace('-', ' ')}
-                    </span>
-                    <select
-                      value={section.status}
-                      onChange={(e) => updateSectionStatus(section.id, e.target.value as PaperSection['status'])}
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-sm border rounded px-2 py-1"
-                    >
-                      <option value="not-started">Not Started</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="needs-review">Needs Review</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                  </div>
-                </div>
-              );
-            })}
-        </div>
+                );
+              })}
+          </div>
+        )}
       </div>
 
       {/* Abstract Section */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Abstract</h3>
         <textarea
-          value={activePaper.abstract}
+          value={activePaper.abstract || ''}
           onChange={(e) => updateAbstract(e.target.value)}
           placeholder="Write your paper abstract here..."
           className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -345,7 +376,7 @@ const CurrentPaperComponent: React.FC = () => {
           </h3>
           <input
             type="text"
-            value={activePaper.researchArea}
+            value={researchArea}
             onChange={(e) => updateResearchArea(e.target.value)}
             placeholder="e.g., Machine Learning, Artificial Intelligence"
             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -372,7 +403,7 @@ const CurrentPaperComponent: React.FC = () => {
             }}
           />
           <div className="mt-3 flex flex-wrap gap-2">
-            {activePaper.coAuthors.map((author, index) => (
+            {coAuthors.map((author, index) => (
               <span
                 key={index}
                 className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-1"

@@ -3,7 +3,8 @@ import { ArrowLeft, FileText, MessageSquare, BarChart3 } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 
 import CurrentPaperComponent from '../paper/CurrentPaperComponent';
-import ResearchChatPlatform from '../paper/ResearchChatPlatform';
+//import ResearchChatPlatform from '../paper/ResearchChatPlatform';
+import ResearchChatDemo from '../paper/ResearchChatDemo';
 import ResearchProgressComponent from '../paper/ResearchProgressComponent';
 
 interface PaperWorkspaceProps {
@@ -33,9 +34,19 @@ const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
     );
   }
 
-  const lastModified = activePaper.lastModified instanceof Date 
-    ? activePaper.lastModified 
-    : new Date(activePaper.lastModified);
+  // Helper to get date safely
+  const getLastModified = () => {
+    const date = (activePaper as any).updated_at || activePaper.lastModified || activePaper.createdAt;
+    return date instanceof Date ? date : new Date(date);
+  };
+
+  // Helper to get word count safely
+  const getCurrentWordCount = () => {
+    return (activePaper as any).current_word_count || activePaper.currentWordCount || 0;
+  };
+
+  const lastModified = getLastModified();
+  const currentWordCount = getCurrentWordCount();
 
   return (
     <div className="flex-1 flex flex-col h-full">
@@ -57,7 +68,7 @@ const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
               <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
                 <span className="capitalize">{activePaper.status.replace('-', ' ')}</span>
                 <span>{activePaper.progress}% complete</span>
-                <span>{activePaper.currentWordCount.toLocaleString()} words</span>
+                <span>{currentWordCount.toLocaleString()} words</span>
                 <span>Modified {lastModified.toLocaleDateString()}</span>
               </div>
             </div>
@@ -113,7 +124,8 @@ const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
         )}
         {workspaceTab === 'chat' && (
           <div className="h-full overflow-hidden">
-            <ResearchChatPlatform paperContext={activePaper} />
+            {/*<ResearchChatPlatform paperContext={activePaper} />  */} 
+            <ResearchChatDemo />
           </div>
         )}
         {workspaceTab === 'progress' && (

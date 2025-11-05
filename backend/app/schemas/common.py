@@ -48,7 +48,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 class SortParams(BaseModel):
     """Sorting parameters"""
     sort_by: str = "created_at"
-    sort_order: str = Field(default="desc", regex="^(asc|desc)$")
+    sort_order: str = Field(default="desc", pattern="^(asc|desc)$")
 
 
 class FilterParams(BaseModel):

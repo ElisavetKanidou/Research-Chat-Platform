@@ -1,159 +1,155 @@
 """
-Missing Analytics Types for Backend (app/types/analytics.py)
+Analytics Schemas (app/schemas/analytics.py)
 """
-
-from typing import List, Dict, Any, Optional, Union
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel
 
-# Match frontend analytics types exactly
 
-class UserAnalytics(BaseModel):
-    userId: str
-    totalPapers: int
-    publishedPapers: int
-    draftPapers: int
-    inProgressPapers: int
-    totalWords: int
-    avgProgress: float
-    totalCollaborators: int
-    researchAreas: int
-    avgCompletionTime: float
-    productivityScore: float
-    lastUpdated: datetime
+class AnalyticsOverview(BaseModel):
+    """Analytics overview schema matching service output"""
+    user_id: str
+    timeframe: str
+    total_papers: int = 0
+    published_papers: int = 0
+    draft_papers: int = 0
+    in_progress_papers: int = 0
+    total_words: int = 0
+    avg_progress: float = 0.0
+    total_collaborators: int = 0
+    research_areas: int = 0
+    avg_completion_time: float = 0.0
+    productivity_score: int = 0
+    last_updated: str
+
+    # Additional nested data that service might return
+    collaboration: Optional[Dict[str, Any]] = Field(default_factory=lambda: {"total_collaborators": 0})
+
+    class Config:
+        from_attributes = True
+
+
+class TrendDataPoint(BaseModel):
+    """Single data point for trend analysis"""
+    date: str
+    value: float
+    label: Optional[str] = None
+
+
+class TrendAnalysis(BaseModel):
+    """Trend analysis schema"""
+    period: str  # "day", "week", "month", "quarter", "year"
+    metric: str
+    data_points: List[TrendDataPoint] = []
+    total_change: float = 0.0
+    percentage_change: float = 0.0
+    trend_direction: str = "stable"  # "up", "down", "stable"
+
+    class Config:
+        from_attributes = True
 
 
 class SectionProgress(BaseModel):
-    sectionId: str
+    """Individual section progress"""
+    section_id: str
     title: str
-    wordCount: int
+    word_count: int
     status: str
-    timeSpent: float
-    lastModified: datetime
-    revisions: int
-
-
-class TimeDistribution(BaseModel):
-    date: str
-    wordsWritten: int
-    timeSpent: float
-    sessionsCount: int
+    progress: float
+    last_modified: str
 
 
 class PaperAnalytics(BaseModel):
-    paperId: str
-    wordCount: int
-    readingTime: int
-    estimatedCompletionTime: float
-    collaboratorCount: int
-    sectionProgress: List[SectionProgress]
-    timeDistribution: List[TimeDistribution]
-    citationCount: int
-    revisionCount: int
-    createdAt: datetime
-    lastModified: datetime
+    """Detailed paper analytics"""
+    paper_id: str
+    word_count: int
+    reading_time: int
+    estimated_completion_time: float
+    collaborator_count: int
+    section_progress: List[SectionProgress]
+    revision_count: int
+    created_at: str
+    last_modified: str
+
+    class Config:
+        from_attributes = True
 
 
 class ProductivityDataPoint(BaseModel):
+    """Daily productivity metrics"""
     date: str
-    wordsWritten: int
-    timeSpent: float
-    papersWorkedOn: int
-    sessionsCount: int
-    focusScore: int
+    words_written: int
+    papers_worked_on: int
+    sessions_count: int
+    focus_score: int
+    time_spent: Optional[float] = 0.0
 
 
 class ProductivityMetrics(BaseModel):
+    """Productivity metrics over time"""
     daily: List[ProductivityDataPoint]
-    weekly: List[ProductivityDataPoint]
-    monthly: List[ProductivityDataPoint]
+    start_date: str
+    end_date: str
 
-
-class ContributionType(BaseModel):
-    type: str
-    count: int
-    percentage: float
+    class Config:
+        from_attributes = True
 
 
 class CollaborationAnalytics(BaseModel):
-    collaboratorId: str
-    name: str
-    email: str
-    sharedPapers: int
-    totalContributions: int
-    avgResponseTime: float
-    collaborationStarted: datetime
-    lastActivity: datetime
-    contributionTypes: List[ContributionType]
+    """Collaboration analytics for a collaborator"""
+    collaborator_name: str
+    shared_papers: int
+    total_words: int
+    research_areas: List[str]
+    collaboration_strength: int
+
+    class Config:
+        from_attributes = True
 
 
 class ResearchTrend(BaseModel):
+    """Research trend by area"""
     area: str
-    paperCount: int
-    wordCount: int
-    averageProgress: float
-    timeSpent: float
+    paper_count: int
+    word_count: int
+    average_progress: float
     collaborators: List[str]
     publications: int
-    citations: int
 
-
-class PreferredTime(BaseModel):
-    hour: int
-    dayOfWeek: int
-    productivity: float
-
-
-class SessionLength(BaseModel):
-    average: float
-    optimal: float
-    distribution: List[int]
-
-
-class WritingVelocity(BaseModel):
-    wordsPerHour: int
-    wordsPerSession: int
-    consistency: int
+    class Config:
+        from_attributes = True
 
 
 class WritingPattern(BaseModel):
-    preferredTime: PreferredTime
-    sessionLength: SessionLength
-    writingVelocity: WritingVelocity
+    """Writing patterns and habits"""
+    average_words_per_paper: float
+    average_sections_per_paper: float
+    most_productive_status: str
+    consistency_score: float
+    total_writing_days: int
+
+    class Config:
+        from_attributes = True
 
 
 class Insight(BaseModel):
-    id: str
+    """AI-generated insight"""
     type: str
     title: str
     description: str
     severity: str
     actionable: bool
-    suggestions: List[str]
-    dataPoints: List[Any] = []
-    generatedAt: datetime
+    suggestions: Optional[List[str]] = None
+
+    class Config:
+        from_attributes = True
 
 
-class ComparisonMetric(BaseModel):
-    label: str
-    userValue: Union[int, float]
-    benchmarkValue: Union[int, float]
-    percentile: int
-    trend: str
+class AnalyticsResponse(BaseModel):
+    """Complete analytics response"""
+    overview: AnalyticsOverview
+    trends: Optional[List[TrendAnalysis]] = None
+    insights: Optional[List[Insight]] = None
 
-
-class AnalyticsFilter(BaseModel):
-    timeframe: str = "month"
-    startDate: Optional[str] = None
-    endDate: Optional[str] = None
-    paperIds: Optional[List[str]] = None
-    metrics: List[str] = ["all"]
-
-
-class AnalyticsTimeframe(str):
-    DAY = "day"
-    WEEK = "week"
-    MONTH = "month"
-    QUARTER = "quarter"
-    YEAR = "year"
-
+    class Config:
+        from_attributes = True

@@ -21,7 +21,7 @@ router = APIRouter()
 async def get_user_analytics(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    timeframe: str = Query(default="month", regex="^(day|week|month|quarter|year)$")
+    timeframe: str = Query(default="month", pattern="^(day|week|month|quarter|year)$")
 ):
     """Get user analytics matching frontend expectations"""
 

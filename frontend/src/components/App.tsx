@@ -1,13 +1,15 @@
 // components/App.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GlobalProvider, useGlobalContext } from '../contexts/GlobalContext';
+import { authService } from '../services/authService';
 import type { Paper } from '../types/paper';
 import Dashboard from './Dashboard';
 import PapersManagement from './PapersManagement';
 import Analytics from './Analytics';
 import SettingsPanel from './SettingsPanel';
 import PaperWorkspace from './PaperWorkspace';
-import { Bell, Search, Menu, X } from 'lucide-react';
+import LoginPage from './auth/LoginPage';
+import { Bell, Search, Menu, X, LogOut } from 'lucide-react';
 
 type ViewType = 'dashboard' | 'papers' | 'workspace' | 'analytics' | 'settings';
 
@@ -77,6 +79,12 @@ const ResearchPlatform: React.FC = () => {
     setTheme,
     setActivePaper,
   } = useGlobalContext();
+
+  // Handle logout
+  const handleLogout = async () => {
+    await authService.logout();
+    window.location.reload(); // Reload to reset auth state
+  };
 
   // Handle paper selection
   const handlePaperSelect = (paper: Paper) => {
@@ -211,6 +219,14 @@ const ResearchPlatform: React.FC = () => {
                   </span>
                 </div>
               )}
+
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                title="Logout"
+              >
+                <LogOut size={20} />
+              </button>
             </div>
           </div>
         </div>
@@ -253,13 +269,64 @@ const ResearchPlatform: React.FC = () => {
   );
 };
 
-// Main App component with context providers
-const App: React.FC = () => {
+// Auth wrapper component
+const AuthenticatedApp: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = authService.getAccessToken();
+      
+      if (!token || authService.isTokenExpired()) {
+        setIsAuthenticated(false);
+        setIsCheckingAuth(false);
+        return;
+      }
+
+      try {
+        await authService.getCurrentUser();
+        setIsAuthenticated(true);
+        authService.setupTokenRefresh();
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        authService.clearAuthData();
+        setIsAuthenticated(false);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  const handleLoginSuccess = () => {
+    setIsAuthenticated(true);
+  };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // Only load GlobalProvider AFTER authentication
   return (
     <GlobalProvider>
       <ResearchPlatform />
     </GlobalProvider>
   );
+};
+
+// Main App component
+const App: React.FC = () => {
+  return <AuthenticatedApp />;
 };
 
 export default App;

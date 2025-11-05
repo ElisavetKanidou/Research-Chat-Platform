@@ -2,10 +2,10 @@
 User schemas (app/schemas/user.py)
 """
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, EmailStr, validator
+from pydantic import BaseModel, Field, EmailStr, validator, field_validator  # ← Πρόσθεσε field_validator
 from datetime import datetime
 from enum import Enum
-
+from uuid import UUID
 
 class Theme(str, Enum):
     LIGHT = "light"
@@ -261,6 +261,15 @@ class UserResponse(BaseModel):
     preferences: Optional[Dict[str, Any]] = None
     subscription: Optional[Dict[str, Any]] = None
 
+    # ← ΠΡΟΣΘΕΣΕ ΑΥΤΟ ΕΔΩ (πριν το Config)
+    @field_validator('id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        """Convert UUID to string"""
+        if isinstance(v, UUID):
+            return str(v)
+        return v
+
     class Config:
         from_attributes = True
         fields = {
@@ -311,6 +320,14 @@ class UserPublicResponse(BaseModel):
     location: Optional[str] = None
     research_interests: List[str] = []
     created_at: datetime
+
+    @field_validator('id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        """Convert UUID to string"""
+        if isinstance(v, UUID):
+            return str(v)
+        return v
 
     class Config:
         from_attributes = True

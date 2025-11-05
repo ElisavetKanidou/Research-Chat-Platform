@@ -316,7 +316,7 @@ class ChatSuggestionsResponse(BaseModel):
 
 
 class ChatExportRequest(BaseModel):
-    format: str = Field(..., regex=r'^(json|txt|pdf)$')
+    format: str = Field(..., pattern=r'^(json|txt|pdf)$')
     include_metadata: bool = False
     date_range: Optional[Dict[str, datetime]] = None
 

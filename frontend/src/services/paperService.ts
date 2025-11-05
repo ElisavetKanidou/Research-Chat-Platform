@@ -57,6 +57,33 @@ class PaperService {
     }
   }
 
+
+  async updateSection(paperId: string, sectionId: string, updates: any): Promise<any> {
+    try {
+      const response = await apiClient.patch(
+        `${this.basePath}/${paperId}/sections/${sectionId}`, 
+        updates
+      );
+      return response;
+    } catch (error) {
+      console.log('API failed for section update');
+      throw error;
+    }
+  }
+
+  async createSection(paperId: string, sectionData: any): Promise<any> {
+    try {
+      const response = await apiClient.post(
+        `${this.basePath}/${paperId}/sections`, 
+        sectionData
+      );
+      return response;
+    } catch (error) {
+      console.log('API failed for section creation');
+      throw error;
+    }
+  }
+
   // Local storage fallback methods
   private getLocalPapers(): Paper[] {
     try {

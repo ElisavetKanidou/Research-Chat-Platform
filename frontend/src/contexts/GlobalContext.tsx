@@ -5,6 +5,8 @@ import type { User } from '../types/user';
 import { usePaperManagement } from '../hooks/usePaperManagement';
 import { authService } from '../services/authService';
 import type { UserResponse } from '../types/api';
+import { paperService } from '../services/paperService';
+
 
 // Local interfaces to avoid conflicts
 export interface AppNotification {
@@ -36,6 +38,7 @@ interface GlobalContextType {
   updatePaper: (paperId: string, updates: Partial<Paper>) => Promise<Paper>;
   deletePaper: (paperId: string) => Promise<void>;
   setActivePaper: (paper: Paper | null) => void;
+  refreshActivePaper: () => Promise<void>; 
   
   // User management
   user: User | null;
@@ -72,19 +75,36 @@ export const useGlobalContext = () => {
   return context;
 };
 
+// ΑΝΤΙΚΑΤΑΣΤΗΣΤΕ τη συνάρτηση convertUserResponseToUser στο GlobalContext.tsx
+// (Γραμμές περίπου 70-120)
+
 const convertUserResponseToUser = (userData: UserResponse): User => {
+  // Safe access to nested properties with fallbacks
+  const researchInterests = userData.personalInfo?.researchInterests || 
+                            (userData as any).research_interests || 
+                            [];
+  
+  const affiliation = (userData as any).affiliation || 
+                      userData.personalInfo?.affiliation || 
+                      '';
+  
+  const subscriptionPlan = (userData as any).subscription_plan || 'free';
+  const subscriptionStatus = (userData as any).subscription_status || 'active';
+  
   return {
     ...userData,
     createdAt: new Date(userData.createdAt),
     lastLoginAt: new Date(userData.lastLoginAt),
     personalInfo: {
-      ...userData.personalInfo,
-      // Note: timezone is now only in preferences, not personalInfo
+      name: userData.name || '',
+      email: userData.email || '',
+      affiliation: affiliation,
+      researchInterests: researchInterests,
     },
     preferences: {
       theme: 'light',
       language: 'en',
-      timezone: 'UTC', // Main timezone location
+      timezone: 'UTC',
       dateFormat: 'MM/dd/yyyy',
       defaultWordCount: 8000,
       autoSave: true,
@@ -109,19 +129,20 @@ const convertUserResponseToUser = (userData: UserResponse): User => {
         personalLevel: 2,
         globalLevel: 1,
         writingStyle: 'academic',
-        researchFocus: userData.personalInfo.researchInterests,
+        researchFocus: researchInterests,
         suggestionsEnabled: true,
         contextDepth: 'moderate',
       },
     },
     subscription: {
-      plan: 'free',
-      status: 'active',
+      plan: subscriptionPlan,
+      status: subscriptionStatus,
       startDate: new Date(),
       features: [],
     },
   };
 };
+
 
 export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Paper management from custom hook
@@ -354,7 +375,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(autoSaveInterval);
   }, [settings.autoSave, paperManagement.activePaper, paperManagement.updatePaper]);
 
-  // Search functionality
+  // Search functionality with safe field access
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
@@ -362,19 +383,55 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     const searchTimer = setTimeout(() => {
-      const results = paperManagement.papers.filter(paper =>
-        paper.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        paper.abstract.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        paper.researchArea.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        paper.coAuthors.some(author => 
-          author.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      );
+      const results = paperManagement.papers.filter(paper => {
+        const title = paper.title || '';
+        const abstract = paper.abstract || '';
+        const researchArea = (paper as any).research_area || paper.researchArea || '';
+        const coAuthors = (paper as any).co_authors || paper.coAuthors || [];
+        
+        const query = searchQuery.toLowerCase();
+        
+        return (
+          title.toLowerCase().includes(query) ||
+          abstract.toLowerCase().includes(query) ||
+          researchArea.toLowerCase().includes(query) ||
+          coAuthors.some((author: string) => 
+            (author || '').toLowerCase().includes(query)
+          )
+        );
+      });
       setSearchResults(results);
     }, 300);
 
     return () => clearTimeout(searchTimer);
   }, [searchQuery, paperManagement.papers]);
+
+  // Enhanced setActivePaper to load full paper data
+  const setActivePaperEnhanced = async (paper: Paper | null) => {
+    if (paper) {
+      try {
+        // Load full paper with sections from backend
+        const fullPaper = await paperService.getPaper(paper.id);
+        paperManagement.setActivePaper(fullPaper);
+      } catch (error) {
+        console.error('Failed to load full paper, using cached data:', error);
+        paperManagement.setActivePaper(paper);
+      }
+    } else {
+      paperManagement.setActivePaper(null);
+    }
+  };
+  // Refresh active paper from backend
+  const refreshActivePaper = async () => {
+    if (paperManagement.activePaper) {
+      try {
+        const refreshedPaper = await paperService.getPaper(paperManagement.activePaper.id);
+        paperManagement.setActivePaper(refreshedPaper);
+      } catch (error) {
+        console.error('Failed to refresh active paper:', error);
+      }
+    }
+  };
 
   const contextValue: GlobalContextType = {
     // Paper management
@@ -382,12 +439,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     activePaper: paperManagement.activePaper,
     loading: paperManagement.loading,
     error: paperManagement.error,
+    refreshActivePaper,
     
     // Enhanced paper operations
     createPaper: createPaperWithNotification,
     updatePaper: updatePaperWithNotification,
     deletePaper: deletePaperWithNotification,
-    setActivePaper: paperManagement.setActivePaper,
+    setActivePaper: setActivePaperEnhanced,
     
     // User management
     user,

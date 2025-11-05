@@ -1,8 +1,8 @@
 """
 Authentication API endpoints
 """
-from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -83,15 +83,26 @@ async def register(
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
-        login_data: LoginRequest,
+        username: str = Form(None),  # OAuth2 standard
+        password: str = Form(None),  # OAuth2 standard
+        email: str = Form(None),  # Alternative
         db: AsyncSession = Depends(get_db)
 ) -> Any:
-    """Authenticate user and return tokens"""
+    """Authenticate user and return tokens (accepts form data)"""
     try:
+        # username in OAuth2 is actually the email
+        user_email = username or email
+
+        if not user_email or not password:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Email/username and password are required"
+            )
+
         user = await auth_service.authenticate_user(
             db=db,
-            email=login_data.email,
-            password=login_data.password
+            email=user_email,
+            password=password
         )
 
         if not user:
@@ -111,13 +122,13 @@ async def login(
             expires_in=tokens["expires_in"]
         )
 
+    except HTTPException:
+        raise
     except AuthenticationException as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=e.message
         )
-
-
 @router.post("/refresh")
 async def refresh_token(
         refresh_data: RefreshTokenRequest,

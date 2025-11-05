@@ -1,13 +1,8 @@
 // frontend/src/App.tsx
-
-import ResearchChatPlatform from './paper/ResearchChatPlatform';
+import MainLayout from './components/layout/MainLayout';
 
 function App() {
-  return (
-    <main>
-      <ResearchChatPlatform />
-    </main>
-  );
+  return <MainLayout />;
 }
 
 export default App;

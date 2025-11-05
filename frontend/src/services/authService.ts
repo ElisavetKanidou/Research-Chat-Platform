@@ -16,18 +16,62 @@ class AuthService {
   private refreshIntervalId: number | null = null;
 
   // Login user
-  async login(credentials: LoginRequest): Promise<LoginResponse> {
-    try {
-      const response = await apiClient.post<LoginResponse>(`${this.basePath}/login`, credentials);
-      this.setTokens(response.accessToken, response.refreshToken);
-      this.setUserData(response.user);
-      return response;
-    } catch (error) {
-      console.error('Login failed:', error);
-      // Mock login for development
-      return this.mockLogin(credentials.email);
+  // ΑΝΤΙΚΑΤΑΣΤΗΣΤΕ τη μέθοδο login στο authService.ts
+
+async login(credentials: LoginRequest): Promise<LoginResponse> {
+  try {
+    console.log('🔍 [AuthService] Starting login...');
+    
+    // Backend expects OAuth2 form data format
+    const formData = new URLSearchParams();
+    formData.append('username', credentials.email);
+    formData.append('password', credentials.password);
+    
+    console.log('🔍 [AuthService] Sending login request...');
+    
+    const response = await apiClient.postForm<any>(`${this.basePath}/login`, formData, {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    });
+    
+    console.log('🔍 [AuthService] Login response:', response);
+    
+    // Backend returns: { access_token, refresh_token, token_type, expires_in }
+    const accessToken = response.access_token || response.accessToken;
+    const refreshToken = response.refresh_token || response.refreshToken;
+    
+    if (!accessToken) {
+      console.error('❌ [AuthService] No access token in response:', response);
+      throw new Error('No access token received from server');
     }
+    
+    console.log('🔍 [AuthService] Saving tokens...');
+    this.setTokens(accessToken, refreshToken);
+    
+    console.log('🔍 [AuthService] Token saved:', {
+      tokenExists: !!localStorage.getItem('auth_token'),
+      tokenPreview: accessToken.substring(0, 20) + '...'
+    });
+    
+    // Fetch user data after login
+    console.log('🔍 [AuthService] Fetching user data...');
+    const user = await this.getCurrentUser();
+    
+    console.log('🔍 [AuthService] User data received:', user);
+    this.setUserData(user);
+    
+    console.log('🔍 [AuthService] Login complete!');
+    
+    return {
+      user,
+      accessToken,
+      refreshToken,
+      expiresIn: response.expires_in || response.expiresIn || 3600,
+    };
+  } catch (error) {
+    console.error('❌ [AuthService] Login failed:', error);
+    throw error;
   }
+}
 
   // Register new user
   async register(userData: RegisterRequest): Promise<LoginResponse> {

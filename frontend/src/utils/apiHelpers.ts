@@ -46,7 +46,7 @@ export class ApiClient {
   private timeout: number;
 
   constructor(config: Partial<ApiConfig> = {}) {
-    this.baseUrl = config.baseURL || 'http://127.0.0.1:8000/api';
+    this.baseUrl = config.baseURL || 'http://127.0.0.1:8000/api/v1';
     this.timeout = config.timeout || 10000;
     this.defaultHeaders = {
       'Content-Type': 'application/json',
@@ -56,8 +56,12 @@ export class ApiClient {
 
   private getAuthHeaders(): HeadersInit {
     const token = localStorage.getItem('auth_token');
+    console.log('🔍 [ApiClient] Getting auth headers, token exists:', !!token);
+    if (token) {
+      console.log('🔍 [ApiClient] Token preview:', token.substring(0, 20) + '...');
+    }
     return token ? { ...this.defaultHeaders, Authorization: `Bearer ${token}` } : this.defaultHeaders;
-  }
+  }  
 
   private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
@@ -76,25 +80,32 @@ export class ApiClient {
     
     return response.text() as unknown as T;
   }
-
   private async request<T>(method: string, endpoint: string, data?: any): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
       const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
+      const headers = this.getAuthHeaders();
+      
+      console.log(`🔍 [ApiClient] ${method} ${url}`);
+      console.log('🔍 [ApiClient] Headers:', Object.keys(headers));
       
       const response = await fetch(url, {
         method,
-        headers: this.getAuthHeaders(),
+        headers,
         body: data ? JSON.stringify(data) : undefined,
         signal: controller.signal,
       });
 
+      console.log(`🔍 [ApiClient] Response status: ${response.status}`);
+      
       clearTimeout(timeoutId);
       return this.handleResponse<T>(response);
     } catch (error) {
       clearTimeout(timeoutId);
+      
+      console.error('🔍 [ApiClient] Request failed:', error);
       
       if (error instanceof Error && error.name === 'AbortError') {
         throw new ApiError({
@@ -180,6 +191,42 @@ export class ApiClient {
       throw error;
     }
   }
+  async postForm<T>(endpoint: string, data: URLSearchParams | FormData, customHeaders?: Record<string, string>): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+  try {
+    const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
+    const token = localStorage.getItem('auth_token');
+    
+    const headers: HeadersInit = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...customHeaders,
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: data,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    return this.handleResponse<T>(response);
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiError({
+        message: 'Request timeout',
+        status: 408,
+        code: 'TIMEOUT'
+      });
+    }
+    
+    throw error;
+  }
+}
 }
 
 // Singleton instance
@@ -230,3 +277,6 @@ export const retryWithBackoff = async <T>(
   
   throw lastError;
 };
+
+
+

@@ -30,7 +30,7 @@ export const usePaperManagement = () => {
     setError(null);
     try {
       const newPaper: Paper = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         title: paperData.title || 'Untitled Research Paper',
         abstract: paperData.abstract || '',
         status: 'draft',
@@ -188,7 +188,7 @@ export const usePaperManagement = () => {
     const publishedPapers = papers.filter(p => p.status === 'published').length;
     const draftPapers = papers.filter(p => p.status === 'draft').length;
     const inProgressPapers = papers.filter(p => ['in-progress', 'in-review', 'revision'].includes(p.status)).length;
-    const totalWords = papers.reduce((sum, p) => sum + p.currentWordCount, 0);
+    const totalWords = papers.reduce((sum, p) => sum + (p.currentWordCount || 0), 0);
     const avgProgress = totalPapers > 0 ? Math.round(papers.reduce((sum, p) => sum + p.progress, 0) / totalPapers) : 0;
     const totalCollaborators = new Set(papers.flatMap(p => p.coAuthors)).size;
     const researchAreas = new Set(papers.map(p => p.researchArea).filter(Boolean)).size;
@@ -202,6 +202,7 @@ export const usePaperManagement = () => {
       avgProgress,
       totalCollaborators,
       researchAreas,
+      paperService,
     };
   }, [papers]);
 

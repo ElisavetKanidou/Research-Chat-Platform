@@ -1,10 +1,12 @@
 """
-Pydantic schemas for paper-related API requests and responses
+COMPLETE FIXED VERSION - app/schemas/paper.py για Pydantic v2
+Αντικαταστήστε ΟΛΟΚΛΗΡΟ το αρχείο app/schemas/paper.py με αυτό
 """
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 
 
 class PaperStatusEnum(str, Enum):
@@ -37,24 +39,29 @@ class PaperSectionCreate(PaperSectionBase):
 
 
 class PaperSectionUpdate(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True
+    )
+
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     content: Optional[str] = None
     status: Optional[SectionStatusEnum] = None
     order: Optional[int] = Field(None, ge=0)
 
-
 class PaperSectionResponse(PaperSectionBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     word_count: int
-    last_modified: datetime
+    updated_at: datetime  # Changed from last_modified
 
-    class Config:
-        from_attributes = True
-        # Map database field names to frontend field names
-        fields = {
-            'last_modified': 'lastModified',
-            'word_count': 'wordCount'
-        }
+    @field_validator('id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if isinstance(v, UUID):
+            return str(v)
+        return v
 
 
 # Paper Base Schemas
@@ -64,10 +71,11 @@ class PaperBase(BaseModel):
     research_area: Optional[str] = Field(None, max_length=255)
     target_word_count: int = Field(default=8000, gt=0, le=100000)
     tags: Optional[List[str]] = []
-    co_authors: Optional[List[str]] = []
+    co_authors: Optional[str] = []
     is_public: bool = False
 
-    @validator('tags', pre=True)
+    @field_validator('tags', mode='before')
+    @classmethod
     def validate_tags(cls, v):
         if v is None:
             return []
@@ -75,7 +83,8 @@ class PaperBase(BaseModel):
             return [tag.strip() for tag in v.split(',') if tag.strip()]
         return v
 
-    @validator('co_authors', pre=True)
+    @field_validator('co_authors', mode='before')
+    @classmethod
     def validate_co_authors(cls, v):
         if v is None:
             return []
@@ -88,7 +97,8 @@ class PaperCreate(PaperBase):
     status: PaperStatusEnum = PaperStatusEnum.DRAFT
     sections: Optional[List[PaperSectionCreate]] = None
 
-    @validator('sections', pre=True, always=True)
+    @field_validator('sections', mode='before')
+    @classmethod
     def create_default_sections(cls, v):
         if v is None or len(v) == 0:
             return [
@@ -103,24 +113,30 @@ class PaperCreate(PaperBase):
 
 
 class PaperUpdate(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True  # ← Αυτό επιτρέπει και τα δύο formats
+    )
+
     title: Optional[str] = Field(None, min_length=1, max_length=500)
     abstract: Optional[str] = None
     status: Optional[PaperStatusEnum] = None
-    research_area: Optional[str] = Field(None, max_length=255)
-    target_word_count: Optional[int] = Field(None, gt=0, le=100000)
+    research_area: Optional[str] = Field(None, max_length=255, alias='researchArea')  # ← ALIAS
+    target_word_count: Optional[int] = Field(None, gt=0, le=100000, alias='targetWordCount')
     tags: Optional[List[str]] = None
-    co_authors: Optional[List[str]] = None
-    is_public: Optional[bool] = None
+    co_authors: Optional[List[str]] = Field(None, alias='coAuthors')
+    is_public: Optional[bool] = Field(None, alias='isPublic')
     progress: Optional[int] = Field(None, ge=0, le=100)
-    current_word_count: Optional[int] = Field(None, ge=0)
+    current_word_count: Optional[int] = Field(None, ge=0, alias='currentWordCount')
 
     # Publication fields
     doi: Optional[str] = None
     journal: Optional[str] = None
-    publication_date: Optional[datetime] = None
-    citation_count: Optional[int] = Field(None, ge=0)
+    publication_date: Optional[datetime] = Field(None, alias='publicationDate')
+    citation_count: Optional[int] = Field(None, ge=0, alias='citationCount')
 
-    @validator('tags', pre=True)
+    @field_validator('tags', mode='before')
+    @classmethod
     def validate_tags(cls, v):
         if v is None:
             return None
@@ -128,7 +144,8 @@ class PaperUpdate(BaseModel):
             return [tag.strip() for tag in v.split(',') if tag.strip()]
         return v
 
-    @validator('co_authors', pre=True)
+    @field_validator('co_authors', mode='before')
+    @classmethod
     def validate_co_authors(cls, v):
         if v is None:
             return None
@@ -139,37 +156,36 @@ class PaperUpdate(BaseModel):
 
 class PaperListResponse(BaseModel):
     """Lightweight response for paper lists"""
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     title: str
     status: PaperStatusEnum
     progress: int
     created_at: datetime
-    last_modified: datetime
+    updated_at: datetime  # Changed from last_modified
     current_word_count: int
     target_word_count: int
-    research_area: str
+    research_area: Optional[str] = None  # Make optional
     co_authors: List[str]
     tags: List[str]
     is_public: bool
 
-    class Config:
-        from_attributes = True
-        # Map database field names to frontend field names
-        fields = {
-            'created_at': 'createdAt',
-            'last_modified': 'lastModified',
-            'current_word_count': 'currentWordCount',
-            'target_word_count': 'targetWordCount',
-            'research_area': 'researchArea',
-            'co_authors': 'coAuthors',
-            'is_public': 'isPublic'
-        }
+    @field_validator('id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if isinstance(v, UUID):
+            return str(v)
+        return v
 
 
 class PaperResponse(PaperListResponse):
     """Full paper response with sections"""
+    model_config = ConfigDict(from_attributes=True)
+
     abstract: str
-    sections: List[PaperSectionResponse]
+    sections: List[PaperSectionResponse] = []
+    owner_id: str
 
     # Publication fields (optional)
     doi: Optional[str] = None
@@ -177,19 +193,12 @@ class PaperResponse(PaperListResponse):
     publication_date: Optional[datetime] = None
     citation_count: Optional[int] = 0
 
-    class Config:
-        from_attributes = True
-        fields = {
-            'created_at': 'createdAt',
-            'last_modified': 'lastModified',
-            'current_word_count': 'currentWordCount',
-            'target_word_count': 'targetWordCount',
-            'research_area': 'researchArea',
-            'co_authors': 'coAuthors',
-            'is_public': 'isPublic',
-            'publication_date': 'publicationDate',
-            'citation_count': 'citationCount'
-        }
+    @field_validator('id', 'owner_id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if isinstance(v, UUID):
+            return str(v)
+        return v
 
 
 class PaperStatsResponse(BaseModel):
@@ -219,12 +228,14 @@ class CollaboratorRole(str, Enum):
 
 
 class CollaboratorInvite(BaseModel):
-    email: str = Field(..., regex=r'^[^@]+@[^@]+\.[^@]+$')
+    email: str = Field(..., pattern=r'^[^@]+@[^@]+\.[^@]+$')
     role: CollaboratorRole = CollaboratorRole.VIEWER
     message: Optional[str] = None
 
 
 class CollaboratorResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     paper_id: str
@@ -232,13 +243,15 @@ class CollaboratorResponse(BaseModel):
     status: str
     invited_at: datetime
     accepted_at: Optional[datetime] = None
-
-    # User info
     user_name: str
     user_email: str
 
-    class Config:
-        from_attributes = True
+    @field_validator('id', 'user_id', 'paper_id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if isinstance(v, UUID):
+            return str(v)
+        return v
 
 
 # Version control schemas
@@ -247,6 +260,8 @@ class PaperVersionCreate(BaseModel):
 
 
 class PaperVersionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     paper_id: str
     version: str
@@ -256,8 +271,12 @@ class PaperVersionResponse(BaseModel):
     created_by: str
     changes: str
 
-    class Config:
-        from_attributes = True
+    @field_validator('id', 'paper_id', 'created_by', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if isinstance(v, UUID):
+            return str(v)
+        return v
 
 
 # Comment schemas
@@ -268,6 +287,8 @@ class PaperCommentCreate(BaseModel):
 
 
 class PaperCommentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     paper_id: str
     section_id: Optional[str] = None
@@ -279,8 +300,14 @@ class PaperCommentResponse(BaseModel):
     parent_id: Optional[str] = None
     replies: Optional[List['PaperCommentResponse']] = []
 
-    class Config:
-        from_attributes = True
+    @field_validator('id', 'paper_id', 'section_id', 'author_id', 'parent_id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, UUID):
+            return str(v)
+        return v
 
 
 # Update forward reference
@@ -297,6 +324,6 @@ class ExportFormat(str, Enum):
 
 class PaperExportRequest(BaseModel):
     format: ExportFormat
-    include_sections: List[str] = []  # Section IDs to include, empty means all
+    include_sections: List[str] = []
     include_comments: bool = False
     include_references: bool = True

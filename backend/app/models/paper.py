@@ -66,10 +66,16 @@ class Paper(BaseModel):
     # Relationships
     sections = relationship("PaperSection", back_populates="paper", cascade="all, delete-orphan",
                             order_by="PaperSection.order")
-    collaborators = relationship("PaperCollaborator", back_populates="paper", cascade="all, delete-orphan")
+    collaborators = relationship(
+        "PaperCollaborator",
+        back_populates="paper",
+        foreign_keys="PaperCollaborator.paper_id",
+        cascade="all, delete-orphan"
+    )
     chat_messages = relationship("ChatMessage", back_populates="paper", cascade="all, delete-orphan")
     versions = relationship("PaperVersion", back_populates="paper", cascade="all, delete-orphan")
     comments = relationship("PaperComment", back_populates="paper", cascade="all, delete-orphan")
+    analytics = relationship("PaperAnalytics", back_populates="paper", uselist=False, cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Paper(id={self.id}, title='{self.title}', status='{self.status}')>"
@@ -215,9 +221,10 @@ class PaperCollaborator(BaseModel):
     paper = relationship("Paper", back_populates="collaborators")
 
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    user = relationship("User", back_populates="collaborations")
+    user = relationship("User", back_populates="collaborations", foreign_keys=[user_id])
 
     invited_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    invited_by = relationship("User", foreign_keys=[invited_by_id])
     invited_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     accepted_at = Column(DateTime, nullable=True)
 

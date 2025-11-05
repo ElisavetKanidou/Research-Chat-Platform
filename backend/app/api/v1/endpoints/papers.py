@@ -41,7 +41,7 @@ async def create_paper(
         paper_data=paper_data
     )
 
-    return PaperResponse.from_orm(paper)
+    return PaperResponse.model_validate(paper)
 
 
 @router.get("/", response_model=List[PaperListResponse])
@@ -82,7 +82,7 @@ async def get_papers(
     result = await db.execute(query)
     papers = result.scalars().all()
 
-    return [PaperListResponse.from_orm(paper) for paper in papers]
+    return [PaperListResponse.model_validate(paper) for paper in papers]
 
 
 @router.get("/{paper_id}", response_model=PaperResponse)
@@ -101,7 +101,7 @@ async def get_paper(
     if not paper.is_viewable_by(str(current_user.id)):
         raise AuthorizationException("You don't have permission to view this paper")
 
-    return PaperResponse.from_orm(paper)
+    return PaperResponse.model_validate(paper)
 
 
 @router.patch("/{paper_id}", response_model=PaperResponse)
@@ -127,7 +127,7 @@ async def update_paper(
         updates=paper_updates
     )
 
-    return PaperResponse.from_orm(updated_paper)
+    return PaperResponse.model_validate(updated_paper)
 
 
 @router.delete("/{paper_id}")
@@ -173,7 +173,7 @@ async def create_paper_section(
         section_data=section_data
     )
 
-    return PaperSectionResponse.from_orm(section)
+    return PaperSectionResponse.model_validate(section)
 
 
 @router.patch("/{paper_id}/sections/{section_id}", response_model=PaperSectionResponse)
@@ -199,7 +199,7 @@ async def update_paper_section(
         updates=section_updates
     )
 
-    return PaperSectionResponse.from_orm(section)
+    return PaperSectionResponse.model_validate(section)
 
 
 @router.delete("/{paper_id}/sections/{section_id}")
@@ -251,7 +251,7 @@ async def duplicate_paper(
         new_owner_id=current_user.id
     )
 
-    return PaperResponse.from_orm(duplicated_paper)
+    return PaperResponse.model_validate(duplicated_paper)
 
 
 @router.get("/stats/summary")

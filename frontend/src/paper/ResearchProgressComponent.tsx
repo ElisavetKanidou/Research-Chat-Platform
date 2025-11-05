@@ -24,10 +24,26 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
     );
   }
 
-  const completedSections = paper.sections.filter(s => s.status === 'completed').length;
-  const inProgressSections = paper.sections.filter(s => s.status === 'in-progress').length;
-  const totalSections = paper.sections.length;
-  const wordProgress = paper.targetWordCount > 0 ? Math.round((paper.currentWordCount / paper.targetWordCount) * 100) : 0;
+  // Helper functions for safe field access
+  const getSections = () => paper.sections || [];
+  const getCurrentWordCount = () => (paper as any).current_word_count || paper.currentWordCount || 0;
+  const getTargetWordCount = () => (paper as any).target_word_count || paper.targetWordCount || 8000;
+  const getCoAuthors = () => (paper as any).co_authors || paper.coAuthors || [];
+  const getResearchArea = () => (paper as any).research_area || paper.researchArea || '';
+  const getCitationCount = () => (paper as any).citation_count || paper.citationCount || 0;
+  const getLastModified = () => (paper as any).updated_at || paper.lastModified || paper.createdAt;
+
+  const sections = getSections();
+  const currentWordCount = getCurrentWordCount();
+  const targetWordCount = getTargetWordCount();
+  const coAuthors = getCoAuthors();
+  const researchArea = getResearchArea();
+  const citationCount = getCitationCount();
+
+  const completedSections = sections.filter(s => s.status === 'completed').length;
+  const inProgressSections = sections.filter(s => s.status === 'in-progress').length;
+  const totalSections = sections.length;
+  const wordProgress = targetWordCount > 0 ? Math.round((currentWordCount / targetWordCount) * 100) : 0;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -90,8 +106,8 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
         <h3 className="text-lg font-semibold mb-4">Word Count Progress</h3>
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Current: {paper.currentWordCount.toLocaleString()} words</span>
-            <span className="text-sm text-gray-600">Target: {paper.targetWordCount.toLocaleString()} words</span>
+            <span className="text-sm text-gray-600">Current: {currentWordCount.toLocaleString()} words</span>
+            <span className="text-sm text-gray-600">Target: {targetWordCount.toLocaleString()} words</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
             <div 
@@ -101,8 +117,8 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
           </div>
           <div className="text-center">
             <span className="text-lg font-semibold text-gray-900">
-              {paper.targetWordCount - paper.currentWordCount > 0 
-                ? `${(paper.targetWordCount - paper.currentWordCount).toLocaleString()} words remaining`
+              {targetWordCount - currentWordCount > 0 
+                ? `${(targetWordCount - currentWordCount).toLocaleString()} words remaining`
                 : 'Word target achieved!'
               }
             </span>
@@ -114,10 +130,10 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h3 className="text-lg font-semibold mb-4">Section Progress</h3>
         <div className="space-y-4">
-          {paper.sections
+          {sections
             .sort((a, b) => a.order - b.order)
             .map((section) => {
-              const targetWordsPerSection = Math.round(paper.targetWordCount / paper.sections.length);
+              const targetWordsPerSection = Math.round(targetWordCount / sections.length);
               const progress = targetWordsPerSection > 0 ? Math.min((section.wordCount / targetWordsPerSection) * 100, 100) : 0;
               
               return (
@@ -176,7 +192,7 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
             <div className="flex-1">
               <div className="font-medium text-gray-900">Last Modified</div>
               <div className="text-sm text-gray-500">
-                {formatDate(paper.lastModified)}
+                {formatDate(getLastModified())}
               </div>
             </div>
           </div>
@@ -216,8 +232,8 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h3 className="text-lg font-semibold mb-4">Collaboration</h3>
         <div className="space-y-3">
-          {paper.coAuthors.length > 0 ? (
-            paper.coAuthors.map((author, index) => (
+          {coAuthors.length > 0 ? (
+            coAuthors.map((author: string, index: number) => (
               <div key={index} className="flex items-center space-x-3 p-3 border rounded-lg">
                 <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium flex-shrink-0">
                   {author.charAt(0).toUpperCase()}
@@ -251,7 +267,7 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
               <div>
                 <div className="text-sm text-gray-600">Research Area</div>
                 <div className="text-lg font-semibold text-gray-900">
-                  {paper.researchArea || 'Not specified'}
+                  {researchArea || 'Not specified'}
                 </div>
               </div>
               <BookOpen size={20} className="text-blue-600" />
@@ -263,7 +279,7 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
               <div>
                 <div className="text-sm text-gray-600">Citations</div>
                 <div className="text-lg font-semibold text-gray-900">
-                  {paper.citationCount || 0}
+                  {citationCount || 0}
                 </div>
               </div>
               <TrendingUp size={20} className="text-green-600" />

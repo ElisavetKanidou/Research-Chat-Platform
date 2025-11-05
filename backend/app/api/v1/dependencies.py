@@ -46,10 +46,15 @@ async def get_current_user(
         payload = auth_service.verify_token(token, "access")
         user_id = payload.get("sub")
 
+        print(f"🔍 DEBUG: user_id from token = {user_id}, type = {type(user_id)}")  # DEBUG
+
         if user_id is None:
             raise AuthenticationException("Invalid token payload")
 
         user = await auth_service.get_user_by_id(db, user_id)
+
+        print(f"🔍 DEBUG: user found = {user}, is_active = {user.is_active if user else None}")  # DEBUG
+
         if user is None or not user.is_active:
             raise AuthenticationException("User not found or inactive")
 

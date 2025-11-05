@@ -40,8 +40,8 @@ class ChatMessage(BaseModel):
     needs_confirmation = Column(Boolean, default=False, nullable=False)
     confirmed = Column(Boolean, default=False, nullable=False)
 
-    # Metadata
-    metadata = Column(JSON, nullable=True, default={})  # sources, confidence, reasoning steps
+    # Metadata (renamed from 'metadata' to avoid SQLAlchemy conflict)
+    message_metadata = Column(JSON, nullable=True, default={})  # sources, confidence, reasoning steps
 
     # Relationships
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)

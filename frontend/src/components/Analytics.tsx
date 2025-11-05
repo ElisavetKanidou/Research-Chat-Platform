@@ -69,120 +69,134 @@ const Analytics: React.FC = () => {
   const OverviewTab = () => (
     <div className="space-y-6">
       {/* Key Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+        <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Papers</p>
-              <p className="text-3xl font-bold text-blue-600">{stats.totalPapers}</p>
+              <p className="text-2xl lg:text-3xl font-bold text-blue-600">{stats.totalPapers}</p>
             </div>
-            <div className="p-3 bg-blue-100 rounded-full">
-              <FileText className="text-blue-600" size={24} />
+            <div className="p-2 lg:p-3 bg-blue-100 rounded-full">
+              <FileText className="text-blue-600" size={20} />
             </div>
           </div>
-          <div className="mt-4 flex items-center text-sm">
+          <div className="mt-3 lg:mt-4 flex items-center text-sm">
             <span className="text-green-600 font-medium">{stats.publishedPapers} published</span>
             <span className="text-gray-500 ml-2">({stats.completionRate}% completion rate)</span>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Words</p>
-              <p className="text-3xl font-bold text-green-600">{stats.totalWords.toLocaleString()}</p>
+              <p className="text-2xl lg:text-3xl font-bold text-green-600">{stats.totalWords.toLocaleString()}</p>
             </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <BookOpen className="text-green-600" size={24} />
+            <div className="p-2 lg:p-3 bg-green-100 rounded-full">
+              <BookOpen className="text-green-600" size={20} />
             </div>
           </div>
-          <div className="mt-4 flex items-center text-sm">
+          <div className="mt-3 lg:mt-4 flex items-center text-sm">
             <TrendingUp size={16} className="text-green-600 mr-1" />
             <span className="text-green-600 font-medium">+12% this month</span>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Collaborators</p>
-              <p className="text-3xl font-bold text-purple-600">{stats.totalCollaborators}</p>
+              <p className="text-2xl lg:text-3xl font-bold text-purple-600">{stats.totalCollaborators}</p>
             </div>
-            <div className="p-3 bg-purple-100 rounded-full">
-              <Users className="text-purple-600" size={24} />
+            <div className="p-2 lg:p-3 bg-purple-100 rounded-full">
+              <Users className="text-purple-600" size={20} />
             </div>
           </div>
-          <div className="mt-4 flex items-center text-sm text-gray-500">
+          <div className="mt-3 lg:mt-4 flex items-center text-sm text-gray-500">
             <span>Across {stats.researchAreas} research areas</span>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Avg Progress</p>
-              <p className="text-3xl font-bold text-orange-600">{stats.avgProgress}%</p>
+              <p className="text-2xl lg:text-3xl font-bold text-orange-600">{stats.avgProgress}%</p>
             </div>
-            <div className="p-3 bg-orange-100 rounded-full">
-              <Target className="text-orange-600" size={24} />
+            <div className="p-2 lg:p-3 bg-orange-100 rounded-full">
+              <Target className="text-orange-600" size={20} />
             </div>
           </div>
-          <div className="mt-4 flex items-center text-sm text-gray-500">
+          <div className="mt-3 lg:mt-4 flex items-center text-sm text-gray-500">
             <span>{stats.inProgressPapers} papers in progress</span>
           </div>
         </div>
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Research Areas Distribution */}
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Research Areas</h3>
-          <div className="space-y-3">
-            {Object.entries(researchAreasData).map(([area, count]) => (
-              <div key={area}>
-                <div className="flex justify-between text-sm text-gray-600 mb-1">
-                  <span>{area || 'Unspecified'}</span>
-                  <span>{count} paper{count > 1 ? 's' : ''}</span>
+          <div className="space-y-3 max-h-64 overflow-y-auto">
+            {Object.entries(researchAreasData).length > 0 ? (
+              Object.entries(researchAreasData).map(([area, count]) => (
+                <div key={area}>
+                  <div className="flex justify-between text-sm text-gray-600 mb-1">
+                    <span className="truncate pr-2">{area || 'Unspecified'}</span>
+                    <span className="flex-shrink-0">{count} paper{count > 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(count / Math.max(...Object.values(researchAreasData))) * 100}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full"
-                    style={{ width: `${(count / Math.max(...Object.values(researchAreasData))) * 100}%` }}
-                  />
-                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <BarChart3 size={32} className="mx-auto mb-2 opacity-50" />
+                <p>No research areas data available</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
 
         {/* Status Distribution */}
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Paper Status Distribution</h3>
-          <div className="space-y-3">
-            {Object.entries(statusData).map(([status, count]) => {
-              const percentage = Math.round((count / stats.totalPapers) * 100);
-              const statusColors = {
-                'draft': 'bg-gray-500',
-                'in-progress': 'bg-blue-500',
-                'in-review': 'bg-yellow-500',
-                'revision': 'bg-orange-500',
-                'completed': 'bg-green-500',
-                'published': 'bg-purple-500',
-                'archived': 'bg-gray-400'
-              };
-              return (
-                <div key={status} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-4 h-4 rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-gray-400'}`} />
-                    <span className="text-sm capitalize">{status.replace('-', ' ')}</span>
+          <div className="space-y-3 max-h-64 overflow-y-auto">
+            {Object.entries(statusData).length > 0 ? (
+              Object.entries(statusData).map(([status, count]) => {
+                const percentage = Math.round((count / stats.totalPapers) * 100);
+                const statusColors = {
+                  'draft': 'bg-gray-500',
+                  'in-progress': 'bg-blue-500',
+                  'in-review': 'bg-yellow-500',
+                  'revision': 'bg-orange-500',
+                  'completed': 'bg-green-500',
+                  'published': 'bg-purple-500',
+                  'archived': 'bg-gray-400'
+                };
+                return (
+                  <div key={status} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-4 h-4 rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-gray-400'}`} />
+                      <span className="text-sm capitalize">{status.replace('-', ' ')}</span>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {count} ({percentage}%)
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {count} ({percentage}%)
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <FileText size={32} className="mx-auto mb-2 opacity-50" />
+                <p>No papers available</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -193,12 +207,12 @@ const Analytics: React.FC = () => {
     <div className="space-y-6">
       {/* Monthly Productivity Chart */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
           <h3 className="text-lg font-semibold text-gray-900">Monthly Productivity</h3>
           <select
             value={timeFrame}
             onChange={(e) => setTimeFrame(e.target.value as any)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-full sm:w-auto"
           >
             <option value="month">Last Month</option>
             <option value="quarter">Last Quarter</option>
@@ -206,13 +220,13 @@ const Analytics: React.FC = () => {
             <option value="all">All Time</option>
           </select>
         </div>
-        <div className="grid grid-cols-6 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-4 overflow-x-auto">
           {monthlyData.map((data, index) => (
-            <div key={data.month} className="text-center">
+            <div key={data.month} className="text-center min-w-0">
               <div className="mb-2">
-                <div className="relative h-32 bg-gray-100 rounded">
+                <div className="relative h-20 sm:h-24 md:h-32 lg:h-40 bg-gray-100 rounded">
                   <div
-                    className="absolute bottom-0 w-full bg-blue-500 rounded"
+                    className="absolute bottom-0 w-full bg-blue-500 rounded transition-all duration-500 ease-out"
                     style={{
                       height: `${(data.papers / Math.max(...monthlyData.map(d => d.papers))) * 100}%`
                     }}
@@ -221,15 +235,15 @@ const Analytics: React.FC = () => {
               </div>
               <div className="text-sm font-medium text-gray-900">{data.month}</div>
               <div className="text-xs text-gray-500">{data.papers} papers</div>
-              <div className="text-xs text-gray-500">{data.words.toLocaleString()} words</div>
+              <div className="text-xs text-gray-500">{(data.words / 1000).toFixed(0)}k words</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Writing Velocity and other productivity metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+        <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border">
           <div className="flex items-center justify-between mb-4">
             <h4 className="font-medium text-gray-900">Writing Velocity</h4>
             <Clock size={18} className="text-gray-400" />
@@ -242,7 +256,7 @@ const Analytics: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border">
           <div className="flex items-center justify-between mb-4">
             <h4 className="font-medium text-gray-900">Completion Time</h4>
             <Calendar size={18} className="text-gray-400" />
@@ -254,7 +268,7 @@ const Analytics: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border sm:col-span-2 lg:col-span-1">
           <div className="flex items-center justify-between mb-4">
             <h4 className="font-medium text-gray-900">Focus Sessions</h4>
             <Target size={18} className="text-gray-400" />
@@ -270,21 +284,28 @@ const Analytics: React.FC = () => {
       {/* Research Timeline */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Research Timeline</h3>
-        <div className="space-y-4">
-          {safePapers.slice(0, 5).map((paper, index) => (
-            <div key={paper.id} className="flex items-center gap-4">
-              <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full" />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-900">{paper.title}</span>
-                  <span className="text-sm text-gray-500">{paper.createdAt.toLocaleDateString()}</span>
-                </div>
-                <div className="text-sm text-gray-600">
-                  {paper.status === 'published' ? 'Published' : `${paper.progress}% complete`}
+        <div className="space-y-4 max-h-80 overflow-y-auto">
+          {safePapers.slice(0, 5).length > 0 ? (
+            safePapers.slice(0, 5).map((paper, index) => (
+              <div key={paper.id} className="flex items-center gap-4">
+                <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <span className="font-medium text-gray-900 truncate">{paper.title}</span>
+                    <span className="text-sm text-gray-500 flex-shrink-0">{paper.createdAt.toLocaleDateString()}</span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {paper.status === 'published' ? 'Published' : `${paper.progress}% complete`}
+                  </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <Clock size={32} className="mx-auto mb-2 opacity-50" />
+              <p>No research activity yet</p>
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>
@@ -295,23 +316,23 @@ const Analytics: React.FC = () => {
       {/* Top Collaborators */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Collaborators</h3>
-        <div className="space-y-3">
+        <div className="space-y-3 max-h-96 overflow-y-auto">
           {topCollaborators.length > 0 ? (
             topCollaborators.map(([name, count], index) => (
               <div key={name} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-medium text-blue-600">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-medium text-blue-600 flex-shrink-0">
                     {name.split(' ').map(n => n[0]).join('')}
                   </div>
-                  <div>
-                    <div className="font-medium text-gray-900">{name}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium text-gray-900 truncate">{name}</div>
                     <div className="text-sm text-gray-600">{count} collaboration{count > 1 ? 's' : ''}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <div className="w-16 bg-gray-200 rounded-full h-2">
                     <div
-                      className="bg-blue-500 h-2 rounded-full"
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${(count / Math.max(...topCollaborators.map(([,c]) => c))) * 100}%` }}
                     />
                   </div>
@@ -329,7 +350,7 @@ const Analytics: React.FC = () => {
       </div>
 
       {/* Collaboration Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <div className="text-center">
             <div className="text-3xl font-bold text-blue-600 mb-2">{stats.totalCollaborators}</div>
@@ -344,7 +365,7 @@ const Analytics: React.FC = () => {
             <div className="text-sm text-gray-600">Avg Co-authors per Paper</div>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="bg-white p-6 rounded-lg shadow-sm border sm:col-span-2 lg:col-span-1">
           <div className="text-center">
             <div className="text-3xl font-bold text-purple-600 mb-2">{stats.researchAreas}</div>
             <div className="text-sm text-gray-600">Research Areas</div>
@@ -357,24 +378,24 @@ const Analytics: React.FC = () => {
   const ResearchTab = () => (
     <div className="space-y-6">
       {/* Research Impact Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border text-center">
-          <Award size={32} className="mx-auto text-yellow-600 mb-3" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+        <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border text-center">
+          <Award size={28} className="mx-auto text-yellow-600 mb-3" />
           <div className="text-2xl font-bold text-gray-900">342</div>
           <div className="text-sm text-gray-600">Total Citations</div>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border text-center">
-          <BarChart3 size={32} className="mx-auto text-green-600 mb-3" />
+        <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border text-center">
+          <BarChart3 size={28} className="mx-auto text-green-600 mb-3" />
           <div className="text-2xl font-bold text-gray-900">15.2</div>
           <div className="text-sm text-gray-600">H-Index</div>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border text-center">
-          <TrendingUp size={32} className="mx-auto text-blue-600 mb-3" />
+        <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border text-center">
+          <TrendingUp size={28} className="mx-auto text-blue-600 mb-3" />
           <div className="text-2xl font-bold text-gray-900">28.5</div>
           <div className="text-sm text-gray-600">Avg Citations/Paper</div>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border text-center">
-          <FileText size={32} className="mx-auto text-purple-600 mb-3" />
+        <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border text-center">
+          <FileText size={28} className="mx-auto text-purple-600 mb-3" />
           <div className="text-2xl font-bold text-gray-900">{stats.publishedPapers}</div>
           <div className="text-sm text-gray-600">Published Papers</div>
         </div>
@@ -383,82 +404,93 @@ const Analytics: React.FC = () => {
       {/* Recent Publications */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Publications</h3>
-        <div className="space-y-3">
-          {safePapers.filter(p => p.status === 'published').slice(0, 5).map((paper) => (
-            <div key={paper.id} className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg">
-              <div className="p-2 bg-green-100 rounded">
-                <FileText size={16} className="text-green-600" />
-              </div>
-              <div className="flex-1">
-                <h4 className="font-medium text-gray-900">{paper.title}</h4>
-                <p className="text-sm text-gray-600 mt-1">
-                  {paper.researchArea} • {paper.currentWordCount.toLocaleString()} words
-                </p>
-                <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-                  <span>Published {paper.lastModified.toLocaleDateString()}</span>
-                  {paper.coAuthors.length > 0 && (
-                    <>
-                      <span>•</span>
-                      <span>{paper.coAuthors.length} co-author{paper.coAuthors.length > 1 ? 's' : ''}</span>
-                    </>
-                  )}
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+          {safePapers.filter(p => p.status === 'published').slice(0, 5).length > 0 ? (
+            safePapers.filter(p => p.status === 'published').slice(0, 5).map((paper) => (
+              <div key={paper.id} className="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg">
+                <div className="p-2 bg-green-100 rounded flex-shrink-0">
+                  <FileText size={16} className="text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-gray-900 truncate">{paper.title}</h4>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {paper.researchArea} • {paper.currentWordCount.toLocaleString()} words
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-500">
+                    <span>Published {paper.lastModified.toLocaleDateString()}</span>
+                    {paper.coAuthors.length > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>{paper.coAuthors.length} co-author{paper.coAuthors.length > 1 ? 's' : ''}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <FileText size={32} className="mx-auto mb-2 opacity-50" />
+              <p>No published papers yet</p>
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>
   );
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Analytics & Insights</h1>
-            <p className="text-gray-600">Track your research progress and discover patterns</p>
+    <div className="h-full overflow-hidden flex flex-col">
+      <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Analytics & Insights</h1>
+              <p className="text-gray-600">Track your research progress and discover patterns</p>
+            </div>
+            <button
+              onClick={exportAnalytics}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto justify-center"
+            >
+              <Download size={18} />
+              Export Report
+            </button>
           </div>
-          <button
-            onClick={exportAnalytics}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Download size={18} />
-            Export Report
-          </button>
-        </div>
 
-        {/* Tab Navigation */}
-        <div className="bg-white p-1 rounded-lg shadow-sm border">
-          <div className="flex space-x-1">
-            {[
-              { id: 'overview', label: 'Overview', icon: BarChart3 },
-              { id: 'productivity', label: 'Productivity', icon: TrendingUp },
-              { id: 'collaboration', label: 'Collaboration', icon: Users },
-              { id: 'research', label: 'Research Impact', icon: Award }
-            ].map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id as any)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                  activeTab === id
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                <Icon size={18} />
-                {label}
-              </button>
-            ))}
+          {/* Tab Navigation */}
+          <div className="bg-white p-1 rounded-lg shadow-sm border overflow-x-auto">
+            <div className="flex space-x-1 min-w-max">
+              {[
+                { id: 'overview', label: 'Overview', icon: BarChart3 },
+                { id: 'productivity', label: 'Productivity', icon: TrendingUp },
+                { id: 'collaboration', label: 'Collaboration', icon: Users },
+                { id: 'research', label: 'Research Impact', icon: Award }
+              ].map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id as any)}
+                  className={`flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                    activeTab === id
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span className="hidden sm:inline">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          <div className="min-h-0">
+            {activeTab === 'overview' && <OverviewTab />}
+            {activeTab === 'productivity' && <ProductivityTab />}
+            {activeTab === 'collaboration' && <CollaborationTab />}
+            {activeTab === 'research' && <ResearchTab />}
           </div>
         </div>
-
-        {/* Tab Content */}
-        {activeTab === 'overview' && <OverviewTab />}
-        {activeTab === 'productivity' && <ProductivityTab />}
-        {activeTab === 'collaboration' && <CollaborationTab />}
-        {activeTab === 'research' && <ResearchTab />}
       </div>
     </div>
   );

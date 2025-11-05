@@ -83,7 +83,13 @@ class User(BaseModel):
     # Relationships
     papers = relationship("Paper", back_populates="owner", cascade="all, delete-orphan")
     chat_messages = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
-    collaborations = relationship("PaperCollaborator", back_populates="user")
+    collaborations = relationship(
+        "PaperCollaborator",
+        back_populates="user",
+        foreign_keys="PaperCollaborator.user_id"
+    )
+    personalization_settings = relationship("PersonalizationSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    analytics = relationship("UserAnalytics", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email='{self.email}', name='{self.name}')>"
@@ -151,3 +157,9 @@ class User(BaseModel):
             "research_interests": self.research_interests,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+    def can_create_papers(self) -> bool:
+        """Check if user can create papers based on subscription"""
+        # Free users: unlimited for now (or add limit)
+        # Premium users: unlimited
+        return self.is_active
