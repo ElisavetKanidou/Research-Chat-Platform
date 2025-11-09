@@ -1,252 +1,336 @@
 """
-Updated Analytics Endpoints to match Frontend (app/api/v1/endpoints/analytics.py)
+CORRECTED Analytics Endpoints - Removed duplicate /productivity endpoint
+app/api/v1/endpoints/analytics.py
 """
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, and_, extract
 from datetime import datetime, timedelta
 
 from app.api.v1.endpoints.auth import get_current_user
 from app.database.session import get_db
 from app.models.user import User
-from app.services.paper_service import paper_service
+from app.models.paper import Paper, PaperStatus
 from app.services.analytics_service import analytics_service
-from app.schemas.analytics import AnalyticsOverview, TrendAnalysis
-from app.schemas.common import SuccessResponse
 
 router = APIRouter()
 
+# ============================================
+# MAIN ANALYTICS ENDPOINTS
+# ============================================
 
-@router.get("/user")
-async def get_user_analytics(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-    timeframe: str = Query(default="month", pattern="^(day|week|month|quarter|year)$")
+@router.get("/overview")
+async def get_analytics_overview(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
 ):
-    """Get user analytics matching frontend expectations"""
+    """Get overview analytics for the user"""
 
-    try:
-        # Calculate date range based on timeframe
-        end_date = datetime.utcnow()
-        if timeframe == "day":
-            start_date = end_date - timedelta(days=1)
-        elif timeframe == "week":
-            start_date = end_date - timedelta(weeks=1)
-        elif timeframe == "month":
-            start_date = end_date - timedelta(days=30)
-        elif timeframe == "quarter":
-            start_date = end_date - timedelta(days=90)
-        else:  # year
-            start_date = end_date - timedelta(days=365)
+    # Total papers by status
+    status_query = select(
+        Paper.status,
+        func.count(Paper.id).label('count')
+    ).where(
+        Paper.owner_id == current_user.id
+    ).group_by(Paper.status)
 
-        # Get comprehensive analytics
-        overview = await analytics_service.get_user_overview(
-            db=db,
-            user_id=current_user.id,
-            start_date=start_date,
-            end_date=end_date
+    status_result = await db.execute(status_query)
+    status_counts = {}
+    for row in status_result:
+        # Convert enum to string
+        status_str = row.status.value if hasattr(row.status, 'value') else str(row.status)
+        status_counts[status_str] = row.count
+
+    # Total word count
+    word_count_query = select(
+        func.sum(Paper.current_word_count).label('total_words')
+    ).where(Paper.owner_id == current_user.id)
+
+    word_result = await db.execute(word_count_query)
+    total_words = word_result.scalar() or 0
+
+    # Average progress
+    progress_query = select(
+        func.avg(Paper.progress).label('avg_progress')
+    ).where(
+        and_(
+            Paper.owner_id == current_user.id,
+            Paper.status != PaperStatus.ARCHIVED
         )
+    )
 
-        # Transform to match frontend AnalyticsResponse format
-        response = {
-            "userId": str(current_user.id),
-            "timeframe": timeframe,
-            "startDate": start_date.isoformat(),
-            "endDate": end_date.isoformat(),
-            "metrics": [
-                {"name": "totalPapers", "value": overview.total_papers, "unit": "count", "change": 0, "changeType": "stable", "trend": []},
-                {"name": "publishedPapers", "value": overview.published_papers, "unit": "count", "change": 0, "changeType": "stable", "trend": []},
-                {"name": "draftPapers", "value": overview.total_papers - overview.published_papers, "unit": "count", "change": 0, "changeType": "stable", "trend": []},
-                {"name": "inProgressPapers", "value": overview.total_papers - overview.published_papers, "unit": "count", "change": 0, "changeType": "stable", "trend": []},
-                {"name": "totalWords", "value": overview.total_words, "unit": "words", "change": 12, "changeType": "increase", "trend": []},
-                {"name": "avgProgress", "value": overview.avg_progress, "unit": "percentage", "change": 0, "changeType": "stable", "trend": []},
-                {"name": "collaborators", "value": overview.collaboration.total_collaborators, "unit": "count", "change": 0, "changeType": "stable", "trend": []},
-                {"name": "researchAreas", "value": len(overview.research_areas), "unit": "count", "change": 0, "changeType": "stable", "trend": []},
-                {"name": "avgCompletionTime", "value": 4.2, "unit": "months", "change": 0, "changeType": "stable", "trend": []},
-                {"name": "productivityScore", "value": overview.productivity_score, "unit": "score", "change": 5, "changeType": "increase", "trend": []},
-            ],
-            "insights": [],
-            "generatedAt": datetime.utcnow().isoformat()
-        }
+    progress_result = await db.execute(progress_query)
+    avg_progress = progress_result.scalar() or 0
 
-        return response
+    # Papers created this month
+    now = datetime.now()
+    first_day_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get user analytics: {str(e)}"
+    this_month_query = select(
+        func.count(Paper.id)
+    ).where(
+        and_(
+            Paper.owner_id == current_user.id,
+            Paper.created_at >= first_day_of_month
         )
+    )
 
+    this_month_result = await db.execute(this_month_query)
+    papers_this_month = this_month_result.scalar() or 0
+
+    # ============================================
+    # FIX: Calculate active_papers correctly
+    # Check all possible status variations
+    # ============================================
+    active_papers = 0
+    for status_key in status_counts.keys():
+        status_lower = status_key.lower()
+        # Match any variation: 'in-progress', 'IN_PROGRESS', 'draft', 'DRAFT', etc.
+        if any(x in status_lower for x in ['progress', 'draft', 'in_progress', 'in-progress']):
+            active_papers += status_counts[status_key]
+
+    # Debug: Print status_counts to see actual values
+    print(f"DEBUG - Status counts: {status_counts}")
+    print(f"DEBUG - Active papers: {active_papers}")
+
+    return {
+        "total_papers": sum(status_counts.values()),
+        "status_breakdown": status_counts,
+        "total_words": int(total_words),
+        "average_progress": round(float(avg_progress), 2),
+        "active_papers": active_papers,  # ← Fixed calculation
+        "published_papers": status_counts.get('PUBLISHED', 0) or status_counts.get('published', 0),
+        "papers_this_month": papers_this_month
+    }
 
 @router.get("/productivity")
-async def get_productivity_metrics(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-    filter: Optional[str] = Query(None)
+async def get_productivity_analytics(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+        months: int = Query(6, ge=1, le=24)
 ):
-    """Get productivity metrics matching frontend ProductivityMetrics format"""
+    """Get monthly productivity data"""
 
-    try:
-        # Generate mock data that matches frontend expectations
-        daily_data = []
-        for i in range(30):
-            date = datetime.utcnow() - timedelta(days=i)
-            daily_data.append({
-                "date": date.strftime('%Y-%m-%d'),
-                "wordsWritten": 200 + (i * 10) % 400,
-                "timeSpent": 1 + (i % 6),
-                "papersWorkedOn": 1 + (i % 3),
-                "sessionsCount": 1 + (i % 4),
-                "focusScore": 60 + (i % 40)
+    now = datetime.now()
+
+    # Monthly paper counts and word counts
+    monthly_query = select(
+        extract('year', Paper.created_at).label('year'),
+        extract('month', Paper.created_at).label('month'),
+        func.count(Paper.id).label('paper_count'),
+        func.sum(Paper.current_word_count).label('word_count')
+    ).where(
+        Paper.owner_id == current_user.id
+    ).group_by(
+        extract('year', Paper.created_at),
+        extract('month', Paper.created_at)
+    ).order_by(
+        extract('year', Paper.created_at),
+        extract('month', Paper.created_at)
+    )
+
+    result = await db.execute(monthly_query)
+    monthly_data = []
+
+    for row in result:
+        try:
+            month_name = datetime(int(row.year), int(row.month), 1).strftime('%b')
+            monthly_data.append({
+                "month": month_name,
+                "year": int(row.year),
+                "papers": row.paper_count,
+                "words": int(row.word_count or 0)
             })
+        except Exception as e:
+            print(f"Error processing row: {e}")
+            continue
 
-        return {
-            "daily": list(reversed(daily_data)),  # Most recent first
-            "weekly": [],
-            "monthly": []
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get productivity metrics: {str(e)}"
+    # ============================================
+    # FIX 1: Calculate writing velocity from UPDATED papers
+    # (papers worked on in last 30 days, not created)
+    # ============================================
+    recent_work_query = select(
+        func.sum(Paper.current_word_count)
+    ).where(
+        and_(
+            Paper.owner_id == current_user.id,
+            Paper.updated_at >= now - timedelta(days=30)  # ← Changed from created_at
         )
+    )
+
+    words_result = await db.execute(recent_work_query)
+    words_last_month = words_result.scalar() or 0
+    words_per_week = int(words_last_month / 4) if words_last_month else 0
+
+    # ============================================
+    # FIX 2: Calculate completion time correctly
+    # ============================================
+    completed_papers_query = select(
+        Paper.created_at,
+        Paper.updated_at
+    ).where(
+        and_(
+            Paper.owner_id == current_user.id,
+            Paper.status == PaperStatus.PUBLISHED
+        )
+    )
+
+    completed_result = await db.execute(completed_papers_query)
+    completion_times = []
+
+    for row in completed_result:
+        if row.created_at and row.updated_at:
+            delta = row.updated_at - row.created_at
+            months_taken = delta.days / 30
+            if months_taken > 0:  # Only count valid times
+                completion_times.append(months_taken)
+
+    avg_completion_time = sum(completion_times) / len(completion_times) if completion_times else 0
+
+    return {
+        "monthly_data": monthly_data,
+        "writing_velocity": {
+            "words_per_week": words_per_week,
+            "change_from_last_month": 0
+        },
+        "completion_time": {
+            "average_months": round(avg_completion_time, 1),
+            "fastest_months": round(min(completion_times), 1) if completion_times else 0
+        }
+    }
 
 
 @router.get("/collaboration")
 async def get_collaboration_analytics(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
 ):
     """Get collaboration analytics"""
 
-    try:
-        # Mock collaboration data matching frontend expectations
-        collaboration_data = [
-            {
-                "collaboratorId": "1",
-                "name": "Dr. Sarah Wilson",
-                "email": "sarah.wilson@university.edu",
-                "sharedPapers": 3,
-                "totalContributions": 25,
-                "avgResponseTime": 2.5,
-                "collaborationStarted": "2023-09-01T00:00:00Z",
-                "lastActivity": "2024-01-15T10:30:00Z",
-                "contributionTypes": [
-                    {"type": "writing", "count": 10, "percentage": 40},
-                    {"type": "review", "count": 8, "percentage": 32},
-                    {"type": "editing", "count": 7, "percentage": 28}
-                ]
-            },
-            {
-                "collaboratorId": "2",
-                "name": "Prof. Michael Johnson",
-                "email": "m.johnson@research.edu",
-                "sharedPapers": 2,
-                "totalContributions": 18,
-                "avgResponseTime": 1.8,
-                "collaborationStarted": "2023-11-15T00:00:00Z",
-                "lastActivity": "2024-01-10T16:20:00Z",
-                "contributionTypes": [
-                    {"type": "review", "count": 12, "percentage": 67},
-                    {"type": "writing", "count": 4, "percentage": 22},
-                    {"type": "editing", "count": 2, "percentage": 11}
-                ]
-            }
-        ]
+    # Get all papers with their co-authors
+    papers_query = select(Paper).where(Paper.owner_id == current_user.id)
+    result = await db.execute(papers_query)
+    papers = result.scalars().all()
 
-        return collaboration_data
+    all_coauthors = []
+    for paper in papers:
+        if paper.co_authors:
+            all_coauthors.extend(paper.co_authors)
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get collaboration analytics: {str(e)}"
+    # Count unique collaborators
+    unique_coauthors = len(set(all_coauthors))
+
+    # Most frequent collaborators
+    from collections import Counter
+    coauthor_counts = Counter(all_coauthors)
+    top_collaborators = [
+        {"name": name, "papers": count}
+        for name, count in coauthor_counts.most_common(10)
+    ]
+
+    return {
+        "total_collaborators": unique_coauthors,
+        "collaborative_papers": len([p for p in papers if p.co_authors]),
+        "solo_papers": len([p for p in papers if not p.co_authors]),
+        "top_collaborators": top_collaborators
+    }
+
+
+@router.get("/research-impact")
+async def get_research_impact(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    """Get research impact analytics with H-Index calculation"""
+
+    # Get all published papers with their citation counts
+    papers_query = select(
+        Paper.citation_count
+    ).where(
+        and_(
+            Paper.owner_id == current_user.id,
+            Paper.status == PaperStatus.PUBLISHED,
+            Paper.citation_count.isnot(None)
         )
+    ).order_by(Paper.citation_count.desc())
 
+    papers_result = await db.execute(papers_query)
+    citation_counts = [row.citation_count for row in papers_result if row.citation_count > 0]
+
+    # Calculate total citations
+    total_citations = sum(citation_counts)
+
+    # Calculate H-Index
+    h_index = 0
+    for i, citations in enumerate(citation_counts, start=1):
+        if citations >= i:
+            h_index = i
+        else:
+            break
+
+    # Published papers count
+    published_query = select(
+        func.count(Paper.id)
+    ).where(
+        and_(
+            Paper.owner_id == current_user.id,
+            Paper.status == PaperStatus.PUBLISHED
+        )
+    )
+
+    published_result = await db.execute(published_query)
+    published_count = published_result.scalar() or 0
+
+    # Published papers by research area
+    area_query = select(
+        Paper.research_area,
+        func.count(Paper.id).label('count')
+    ).where(
+        and_(
+            Paper.owner_id == current_user.id,
+            Paper.status == PaperStatus.PUBLISHED,
+            Paper.research_area.isnot(None)
+        )
+    ).group_by(Paper.research_area)
+
+    area_result = await db.execute(area_query)
+    research_areas = [
+        {"area": row.research_area, "papers": row.count}
+        for row in area_result
+    ]
+
+    return {
+        "total_citations": int(total_citations),
+        "published_papers": published_count,
+        "research_areas": research_areas,
+        "h_index": h_index,  # ← CALCULATED!
+        "average_citations": round(total_citations / published_count, 1) if published_count > 0 else 0
+    }
+
+# ============================================
+# LEGACY ENDPOINTS (Keep for compatibility)
+# ============================================
 
 @router.get("/trends")
 async def get_research_trends(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get research trends matching frontend ResearchTrend format"""
-
-    try:
-        trends = [
-            {
-                "area": "Machine Learning",
-                "paperCount": 5,
-                "wordCount": 28500,
-                "averageProgress": 72,
-                "timeSpent": 120,
-                "collaborators": ["Dr. Smith", "Jane Doe"],
-                "publications": 2,
-                "citations": 45
-            },
-            {
-                "area": "Natural Language Processing",
-                "paperCount": 3,
-                "wordCount": 18200,
-                "averageProgress": 65,
-                "timeSpent": 85,
-                "collaborators": ["Prof. Johnson"],
-                "publications": 1,
-                "citations": 23
-            },
-            {
-                "area": "Computer Vision",
-                "paperCount": 2,
-                "wordCount": 12800,
-                "averageProgress": 80,
-                "timeSpent": 60,
-                "collaborators": ["Dr. Wilson"],
-                "publications": 1,
-                "citations": 18
-            }
-        ]
-
-        return trends
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get research trends: {str(e)}"
-        )
-
-
-@router.get("/writing-patterns")
-async def get_writing_patterns(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get writing patterns matching frontend WritingPattern format"""
-
-    try:
-        patterns = {
-            "preferredTime": {
-                "hour": 9,
-                "dayOfWeek": 2,  # Tuesday
-                "productivity": 85
-            },
-            "sessionLength": {
-                "average": 2.5,
-                "optimal": 3.0,
-                "distribution": [1, 2, 4, 6, 3, 2, 1]  # Hours distribution
-            },
-            "writingVelocity": {
-                "wordsPerHour": 320,
-                "wordsPerSession": 800,
-                "consistency": 75
-            }
+    """Get research trends"""
+    trends = [
+        {
+            "area": "Machine Learning",
+            "paperCount": 5,
+            "wordCount": 28500,
+            "averageProgress": 72,
+            "timeSpent": 120,
+            "collaborators": ["Dr. Smith", "Jane Doe"],
+            "publications": 2,
+            "citations": 45
         }
-
-        return patterns
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get writing patterns: {str(e)}"
-        )
+    ]
+    return trends
 
 
 @router.get("/insights")
@@ -254,131 +338,31 @@ async def get_insights(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get AI insights matching frontend Insight format"""
-
-    try:
-        insights = [
-            {
-                "id": "1",
-                "type": "productivity",
-                "title": "Peak Writing Hours",
-                "description": "You are most productive between 9-11 AM, writing 40% more words during this time.",
-                "severity": "info",
-                "actionable": True,
-                "suggestions": [
-                    "Schedule important writing tasks during your peak hours",
-                    "Block calendar time for deep work in the morning"
-                ]
-            },
-            {
-                "id": "2",
-                "type": "collaboration",
-                "title": "Collaboration Opportunity",
-                "description": "Dr. Sarah Wilson has expertise that aligns with your current research direction.",
-                "severity": "info",
-                "actionable": True,
-                "suggestions": [
-                    "Reach out to discuss potential collaboration",
-                    "Share your current draft for feedback"
-                ]
-            },
-            {
-                "id": "3",
-                "type": "writing",
-                "title": "Writing Consistency",
-                "description": "Your writing sessions are most effective when longer than 2 hours.",
-                "severity": "info",
-                "actionable": True,
-                "suggestions": [
-                    "Block longer time periods for writing",
-                    "Avoid short writing sessions when possible"
-                ]
-            }
-        ]
-
-        return insights
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get insights: {str(e)}"
-        )
-
-
-@router.get("/comparisons")
-async def get_comparisons(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get comparison metrics"""
-
-    try:
-        comparisons = [
-            {
-                "label": "Words per Week",
-                "userValue": 2847,
-                "benchmarkValue": 2200,
-                "percentile": 78,
-                "trend": "improving"
-            },
-            {
-                "label": "Papers per Year",
-                "userValue": 4,
-                "benchmarkValue": 3.2,
-                "percentile": 65,
-                "trend": "stable"
-            },
-            {
-                "label": "Collaboration Rate",
-                "userValue": 65,
-                "benchmarkValue": 45,
-                "percentile": 82,
-                "trend": "improving"
-            }
-        ]
-
-        return comparisons
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get comparisons: {str(e)}"
-        )
+    """Get AI insights"""
+    insights = [
+        {
+            "id": "1",
+            "type": "productivity",
+            "title": "Peak Writing Hours",
+            "description": "You are most productive between 9-11 AM.",
+            "severity": "info",
+            "actionable": True,
+            "suggestions": ["Schedule important writing tasks during peak hours"]
+        }
+    ]
+    return insights
 
 
 @router.post("/export")
 async def export_analytics(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    format: str = "json",
-    filter: Optional[Dict[str, Any]] = None
+    format: str = "json"
 ):
     """Export analytics data"""
-
-    try:
-        # This would integrate with your export service
-        export_data = {
-            "userId": str(current_user.id),
-            "exportDate": datetime.utcnow().isoformat(),
-            "format": format,
-            "data": {
-                "summary": "Analytics export completed",
-                "note": "This is a placeholder implementation"
-            }
-        }
-
-        return {
-            "exportId": f"export_{int(datetime.utcnow().timestamp())}",
-            "status": "completed",
-            "downloadUrl": "/exports/analytics.json",
-            "createdAt": datetime.utcnow().isoformat(),
-            "expiresAt": (datetime.utcnow() + timedelta(hours=24)).isoformat()
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to export analytics: {str(e)}"
-        )
-
-
+    return {
+        "exportId": f"export_{int(datetime.utcnow().timestamp())}",
+        "status": "completed",
+        "downloadUrl": "/exports/analytics.json",
+        "createdAt": datetime.utcnow().isoformat()
+    }
