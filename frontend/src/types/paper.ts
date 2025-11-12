@@ -1,15 +1,29 @@
 // types/paper.ts
+// types/paper.ts - ADD THESE INTERFACES
 
-export interface PaperSection {
-  id: string;
-  title: string;
-  content: string;
-  status: 'not-started' | 'in-progress' | 'completed' | 'needs-review';
-  lastModified: Date;
-  wordCount: number;
-  order: number;
+// ==================== AI SETTINGS ====================
+
+export interface PaperAISettings {
+  useGlobalSettings: boolean;
+  labLevel?: number;
+  personalLevel?: number;
+  globalLevel?: number;
+  writingStyle?: 'academic' | 'concise' | 'detailed' | 'collaborative';
+  contextDepth?: 'minimal' | 'moderate' | 'comprehensive';
+  researchFocus?: string[];
+  suggestionsEnabled?: boolean;
 }
 
+export interface PaperAISettingsResponse {
+  paperId: string;
+  isUsingGlobal: boolean;
+  settings: PaperAISettings;
+  globalSettings?: PaperAISettings;
+}
+
+// ==================== UPDATE PAPER INTERFACE ====================
+
+// Add this to the existing Paper interface:
 export interface Paper {
   id: string;
   title: string;
@@ -29,7 +43,21 @@ export interface Paper {
   journal?: string;
   publicationDate?: Date;
   citationCount?: number;
+  
+  // ✅ NEW: AI Settings
+  aiSettings?: PaperAISettings;  // Add this line
 }
+
+export interface PaperSection {
+  id: string;
+  title: string;
+  content: string;
+  status: 'not-started' | 'in-progress' | 'completed' | 'needs-review';
+  lastModified: Date;
+  wordCount: number;
+  order: number;
+}
+
 
 export interface ResearchPhase {
   id: string;

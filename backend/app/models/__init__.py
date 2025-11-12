@@ -1,10 +1,14 @@
 """
-Database models initialization
+Database models initialization - FIXED VERSION
+Remove duplicate PersonalizationSettings import
 """
 from app.models.base import BaseModel
 
 # User model (base for relationships)
 from app.models.user import User
+
+# ✅ Import PersonalizationSettings ONCE from its dedicated file
+from app.models.personalization_settings import PersonalizationSettings
 
 # Paper models
 from app.models.paper import (
@@ -15,13 +19,12 @@ from app.models.paper import (
     SectionStatus
 )
 
-# Chat models
+# Chat models (PersonalizationSettings is imported above, not here)
 from app.models.chat import (
     ChatMessage,
     ChatAttachment,
     MessageRole,
     AttachmentType,
-    PersonalizationSettings,
     ChatSession,
     AIInteraction
 )
@@ -50,6 +53,9 @@ __all__ = [
     # User
     "User",
 
+    # Personalization
+    "PersonalizationSettings",  # ✅ Only imported ONCE
+
     # Paper
     "Paper",
     "PaperSection",
@@ -62,7 +68,6 @@ __all__ = [
     "ChatAttachment",
     "MessageRole",
     "AttachmentType",
-    "PersonalizationSettings",
     "ChatSession",
     "AIInteraction",
 

@@ -1,6 +1,7 @@
 // services/paperService.ts
 import type { Paper } from '../types/paper';
 import { apiClient } from '../utils/apiHelpers';
+import type { PaperAISettings, PaperAISettingsResponse } from '../types/paper';
 
 class PaperService {
   private readonly basePath = '/papers';
@@ -80,6 +81,58 @@ class PaperService {
       return response;
     } catch (error) {
       console.log('API failed for section creation');
+      throw error;
+    }
+  }
+
+// ==================== AI SETTINGS METHODS ====================
+
+  /**
+   * Get AI settings for a specific paper
+   */
+  async getPaperAISettings(paperId: string): Promise<PaperAISettingsResponse> {
+    try {
+      const response = await apiClient.get<PaperAISettingsResponse>(
+        `${this.basePath}/${paperId}/ai-settings`
+      );
+      return response;
+    } catch (error) {
+      console.error('Failed to fetch paper AI settings:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update AI settings for a specific paper
+   */
+  async updatePaperAISettings(
+    paperId: string,
+    settings: Partial<PaperAISettings>
+  ): Promise<PaperAISettingsResponse> {
+    try {
+      const response = await apiClient.patch<PaperAISettingsResponse>(
+        `${this.basePath}/${paperId}/ai-settings`,
+        settings
+      );
+      return response;
+    } catch (error) {
+      console.error('Failed to update paper AI settings:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reset paper to use global AI settings
+   */
+  async resetPaperAISettings(paperId: string): Promise<PaperAISettingsResponse> {
+    try {
+      const response = await apiClient.post<PaperAISettingsResponse>(
+        `${this.basePath}/${paperId}/ai-settings/reset`,
+        {}
+      );
+      return response;
+    } catch (error) {
+      console.error('Failed to reset paper AI settings:', error);
       throw error;
     }
   }

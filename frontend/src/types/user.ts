@@ -1,155 +1,153 @@
-// types/user.ts
+// types/paper.ts - COMPLETE VERSION WITH SIMPLIFIED AI SETTINGS
 
-export interface User {
+// ==================== PAPER SECTION ====================
+
+export interface PaperSection {
   id: string;
-  email: string;
-  name: string;
-  avatar?: string;
-  createdAt: Date;
-  lastLoginAt: Date;
-  isActive: boolean;
-  personalInfo: PersonalInfo;
-  preferences: UserPreferences;
-  subscription: UserSubscription;
+  title: string;
+  content: string;
+  status: 'not-started' | 'in-progress' | 'completed' | 'needs-review';
+  lastModified: Date;
+  wordCount: number;
+  order: number;
 }
 
-export interface PersonalInfo {
-  name: string;
-  email: string;
-  affiliation: string;
-  researchInterests: string[];
-  orcidId?: string;
-  bio?: string;
-  website?: string;
-  location?: string;
-  // Removed duplicate timezone - it belongs in UserPreferences
-}
+// ==================== AI SETTINGS (SIMPLIFIED - NO GLOBAL) ====================
 
-export interface UserPreferences {
-  theme: 'light' | 'dark' | 'auto';
-  language: string;
-  timezone: string;
-  dateFormat: string;
-  defaultWordCount: number;
-  autoSave: boolean;
-  notifications: NotificationPreferences;
-  privacy: PrivacySettings;
-  aiPersonalization: AIPersonalizationSettings;
-}
-
-export interface NotificationPreferences {
-  emailNotifications: boolean;
-  deadlineReminders: boolean;
-  collaborationUpdates: boolean;
-  aiSuggestions: boolean;
-  weeklyReports: boolean;
-  pushNotifications: boolean;
-  reminderFrequency: 'daily' | 'weekly' | 'monthly';
-}
-
-export interface PrivacySettings {
-  profileVisibility: 'public' | 'private' | 'institution';
-  shareAnalytics: boolean;
-  dataSyncEnabled: boolean;
-  allowResearchSharing: boolean;
-  trackingOptOut: boolean;
-}
-
-export interface AIPersonalizationSettings {
+export interface PaperAISettings {
   labLevel: number;
   personalLevel: number;
   globalLevel: number;
   writingStyle: 'academic' | 'concise' | 'detailed' | 'collaborative';
+  contextDepth: 'minimal' | 'moderate' | 'comprehensive';
   researchFocus: string[];
   suggestionsEnabled: boolean;
-  contextDepth: 'minimal' | 'moderate' | 'comprehensive';
 }
 
-export interface UserSubscription {
-  plan: 'free' | 'pro' | 'academic' | 'enterprise';
-  status: 'active' | 'inactive' | 'cancelled' | 'past_due';
+export interface PaperAISettingsResponse {
+  paperId: string;
+  settings: PaperAISettings;
+}
+
+// ==================== PAPER ====================
+
+export interface Paper {
+  id: string;
+  title: string;
+  abstract: string;
+  status: 'draft' | 'in-progress' | 'in-review' | 'revision' | 'completed' | 'published' | 'archived';
+  createdAt: Date;
+  lastModified: Date;
+  progress: number;
+  targetWordCount: number;
+  currentWordCount: number;
+  coAuthors: string[];
+  researchArea: string;
+  sections: PaperSection[];
+  tags: string[];
+  isPublic: boolean;
+  doi?: string;
+  journal?: string;
+  publicationDate?: Date;
+  citationCount?: number;
+  
+  // ✅ AI Settings (per-paper only)
+  aiSettings?: PaperAISettings;
+}
+
+// ==================== RESEARCH WORKFLOW ====================
+
+export interface ResearchPhase {
+  id: string;
+  name: string;
+  status: 'completed' | 'in-progress' | 'pending' | 'overdue';
+  progress: number;
   startDate: Date;
-  endDate?: Date;
-  features: SubscriptionFeature[];
+  dueDate: Date;
+  estimatedHours: number;
+  actualHours: number;
+  tasks: Task[];
+  paperId: string;
 }
 
-export interface SubscriptionFeature {
+export interface Task {
+  id: string;
   name: string;
-  enabled: boolean;
-  limit?: number;
-  used?: number;
+  description?: string;
+  status: 'completed' | 'in-progress' | 'pending';
+  priority: 'high' | 'medium' | 'low';
+  dueDate: Date;
+  assignee?: string;
+  notes?: string;
+  phaseId: string;
+  paperId: string;
 }
 
-export interface UserSession {
-  userId: string;
-  sessionId: string;
-  createdAt: Date;
-  lastActivity: Date;
-  ipAddress?: string;
-  userAgent?: string;
-}
-
-export interface UserAnalytics {
-  userId: string;
-  totalPapers: number;
-  publishedPapers: number;
-  totalWords: number;
-  collaborators: number;
-  researchAreas: string[];
-  avgCompletionTime: number;
-  productivityScore: number;
-  lastUpdated: Date;
-}
-
-export interface UserIntegration {
+export interface Milestone {
   id: string;
-  userId: string;
-  service: 'google_drive' | 'dropbox' | 'zotero' | 'mendeley' | 'latex' | 'orcid';
-  isConnected: boolean;
-  accessToken?: string;
-  refreshToken?: string;
-  expiresAt?: Date;
-  lastSync?: Date;
-  settings?: Record<string, any>;
+  title: string;
+  description: string;
+  date: Date;
+  status: 'completed' | 'upcoming' | 'overdue';
+  paperId: string;
 }
 
-export interface APIKey {
+// ==================== REFERENCES ====================
+
+export interface Reference {
   id: string;
-  userId: string;
-  name: string;
-  key: string;
-  permissions: APIPermission[];
-  createdAt: Date;
-  lastUsed?: Date;
-  isActive: boolean;
-  expiresAt?: Date;
+  title: string;
+  authors: string[];
+  journal: string;
+  year: number;
+  doi?: string;
+  url?: string;
+  notes?: string;
+  tags: string[];
+  paperId: string;
 }
 
-export interface APIPermission {
-  resource: 'papers' | 'analytics' | 'chat' | 'all';
-  actions: ('read' | 'write' | 'delete')[];
-}
+// ==================== COLLABORATION ====================
 
-export interface UserActivity {
+export interface CollaborationInvite {
   id: string;
-  userId: string;
-  action: string;
-  resource: string;
-  resourceId: string;
-  metadata?: Record<string, any>;
-  timestamp: Date;
-  ipAddress?: string;
-}
-
-export interface UserCollaboration {
-  userId: string;
-  collaboratorId: string;
-  relationship: 'colleague' | 'mentor' | 'student' | 'co_author';
-  sharedPapers: string[];
+  paperId: string;
+  invitedEmail: string;
+  invitedBy: string;
+  role: 'viewer' | 'editor' | 'co-author';
+  status: 'pending' | 'accepted' | 'declined';
   createdAt: Date;
+  expiresAt: Date;
 }
 
-export type Theme = UserPreferences['theme'];
-export type Language = UserPreferences['language'];
-export type WritingStyle = AIPersonalizationSettings['writingStyle'];
-export type SubscriptionPlan = UserSubscription['plan'];
+export interface PaperVersion {
+  id: string;
+  paperId: string;
+  version: string;
+  title: string;
+  abstract: string;
+  content: string;
+  createdAt: Date;
+  createdBy: string;
+  changes: string;
+}
+
+export interface PaperComment {
+  id: string;
+  paperId: string;
+  sectionId?: string;
+  content: string;
+  authorId: string;
+  authorName: string;
+  createdAt: Date;
+  resolved: boolean;
+  parentId?: string;
+  replies?: PaperComment[];
+}
+
+// ==================== TYPE ALIASES ====================
+
+export type PaperStatus = Paper['status'];
+export type SectionStatus = PaperSection['status'];  
+export type TaskStatus = Task['status'];
+export type TaskPriority = Task['priority'];

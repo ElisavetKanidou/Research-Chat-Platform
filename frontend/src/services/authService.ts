@@ -1,12 +1,10 @@
 import { apiClient } from '../utils/apiHelpers';
-import type { // <--- Added 'type' keyword for type-only imports
+import type { 
   LoginRequest, 
   LoginResponse, 
   RegisterRequest, 
   UserResponse 
 } from '../types/api';
-// Assuming User is an interface/type from elsewhere, if not, remove or define it
-// import { User } from '../types/user'; 
 
 class AuthService {
   private readonly basePath = '/auth';
@@ -16,62 +14,60 @@ class AuthService {
   private refreshIntervalId: number | null = null;
 
   // Login user
-  // ΑΝΤΙΚΑΤΑΣΤΗΣΤΕ τη μέθοδο login στο authService.ts
-
-async login(credentials: LoginRequest): Promise<LoginResponse> {
-  try {
-    console.log('🔍 [AuthService] Starting login...');
-    
-    // Backend expects OAuth2 form data format
-    const formData = new URLSearchParams();
-    formData.append('username', credentials.email);
-    formData.append('password', credentials.password);
-    
-    console.log('🔍 [AuthService] Sending login request...');
-    
-    const response = await apiClient.postForm<any>(`${this.basePath}/login`, formData, {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    });
-    
-    console.log('🔍 [AuthService] Login response:', response);
-    
-    // Backend returns: { access_token, refresh_token, token_type, expires_in }
-    const accessToken = response.access_token || response.accessToken;
-    const refreshToken = response.refresh_token || response.refreshToken;
-    
-    if (!accessToken) {
-      console.error('❌ [AuthService] No access token in response:', response);
-      throw new Error('No access token received from server');
+  async login(credentials: LoginRequest): Promise<LoginResponse> {
+    try {
+      console.log('🔍 [AuthService] Starting login...');
+      
+      // Backend expects OAuth2 form data format
+      const formData = new URLSearchParams();
+      formData.append('username', credentials.email);
+      formData.append('password', credentials.password);
+      
+      console.log('🔍 [AuthService] Sending login request...');
+      
+      const response = await apiClient.postForm<any>(`${this.basePath}/login`, formData, {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+      
+      console.log('🔍 [AuthService] Login response:', response);
+      
+      // Backend returns: { access_token, refresh_token, token_type, expires_in }
+      const accessToken = response.access_token || response.accessToken;
+      const refreshToken = response.refresh_token || response.refreshToken;
+      
+      if (!accessToken) {
+        console.error('❌ [AuthService] No access token in response:', response);
+        throw new Error('No access token received from server');
+      }
+      
+      console.log('🔍 [AuthService] Saving tokens...');
+      this.setTokens(accessToken, refreshToken);
+      
+      console.log('🔍 [AuthService] Token saved:', {
+        tokenExists: !!localStorage.getItem('auth_token'),
+        tokenPreview: accessToken.substring(0, 20) + '...'
+      });
+      
+      // Fetch user data after login
+      console.log('🔍 [AuthService] Fetching user data...');
+      const user = await this.getCurrentUser();
+      
+      console.log('🔍 [AuthService] User data received:', user);
+      this.setUserData(user);
+      
+      console.log('🔍 [AuthService] Login complete!');
+      
+      return {
+        user,
+        accessToken,
+        refreshToken,
+        expiresIn: response.expires_in || response.expiresIn || 3600,
+      };
+    } catch (error) {
+      console.error('❌ [AuthService] Login failed:', error);
+      throw error;
     }
-    
-    console.log('🔍 [AuthService] Saving tokens...');
-    this.setTokens(accessToken, refreshToken);
-    
-    console.log('🔍 [AuthService] Token saved:', {
-      tokenExists: !!localStorage.getItem('auth_token'),
-      tokenPreview: accessToken.substring(0, 20) + '...'
-    });
-    
-    // Fetch user data after login
-    console.log('🔍 [AuthService] Fetching user data...');
-    const user = await this.getCurrentUser();
-    
-    console.log('🔍 [AuthService] User data received:', user);
-    this.setUserData(user);
-    
-    console.log('🔍 [AuthService] Login complete!');
-    
-    return {
-      user,
-      accessToken,
-      refreshToken,
-      expiresIn: response.expires_in || response.expiresIn || 3600,
-    };
-  } catch (error) {
-    console.error('❌ [AuthService] Login failed:', error);
-    throw error;
   }
-}
 
   // Register new user
   async register(userData: RegisterRequest): Promise<LoginResponse> {
@@ -116,7 +112,7 @@ async login(credentials: LoginRequest): Promise<LoginResponse> {
     }
   }
 
-  // Get current user
+  // Get current user - FIXED: Uses /auth/me endpoint
   async getCurrentUser(): Promise<UserResponse> {
     try {
       return await apiClient.get<UserResponse>(`${this.basePath}/me`);
@@ -142,15 +138,25 @@ async login(credentials: LoginRequest): Promise<LoginResponse> {
     }
   }
 
-  // Change password
+  // ✅ FIXED: Change password - Uses correct snake_case field names
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     try {
-      await apiClient.post(`${this.basePath}/change-password`, {
-        currentPassword,
-        newPassword,
+      console.log('🔒 [AuthService] Changing password...');
+      
+      // ✅ Backend expects snake_case field names (current_password, new_password)
+      await apiClient.post(`/users/me/change-password`, {
+        current_password: currentPassword,
+        new_password: newPassword,
       });
-    } catch (error) {
-      console.error('Password change failed:', error);
+      
+      console.log('✅ [AuthService] Password changed successfully');
+    } catch (error: any) {
+      console.error('❌ [AuthService] Password change failed:', error);
+      
+      // Extract error message from backend response
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
       throw error;
     }
   }
@@ -294,48 +300,6 @@ async login(credentials: LoginRequest): Promise<LoginResponse> {
         this.refreshIntervalId = null;
       }
     });
-  }
-
-  // Mock login for development
-  private async mockLogin(email: string): Promise<LoginResponse> {
-    const mockUser: UserResponse = {
-      id: 'mock-user-id',
-      email,
-      name: email.split('@')[0],
-      createdAt: new Date().toISOString(),
-      lastLoginAt: new Date().toISOString(),
-      isActive: true,
-      personalInfo: {
-        name: email.split('@')[0],
-        email,
-        affiliation: 'Mock University',
-        researchInterests: ['Machine Learning', 'AI'],
-      },
-    };
-
-    const mockResponse: LoginResponse = {
-      user: mockUser,
-      accessToken: this.generateMockToken(mockUser.id),
-      refreshToken: 'mock-refresh-token',
-      expiresIn: 3600,
-    };
-
-    this.setTokens(mockResponse.accessToken, mockResponse.refreshToken);
-    this.setUserData(mockResponse.user);
-
-    // Simulate async
-    return new Promise(resolve => setTimeout(() => resolve(mockResponse), 300));
-  }
-
-  private generateMockToken(userId: string): string {
-    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-    const payload = btoa(JSON.stringify({
-      sub: userId,
-      exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour
-      iat: Math.floor(Date.now() / 1000),
-    }));
-    const signature = 'mock-signature';
-    return `${header}.${payload}.${signature}`;
   }
 
   // Social login methods

@@ -1,5 +1,6 @@
 """
-AI Chat API endpoints for research assistance
+AI Chat API endpoints for research assistance - FIXED IMPORTS
+backend/app/api/v1/endpoints/chat.py
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
@@ -16,7 +17,8 @@ from app.schemas.chat import (
 )
 from app.services.ai_service import ai_service
 from app.services.paper_service import paper_service
-from app.core.exceptions import NotFoundException, ValidationException, AIServiceException
+# ✅ ADD THIS IMPORT - IT WAS MISSING!
+from app.core.exceptions import NotFoundException, ValidationException, AIServiceException, AuthorizationException
 
 router = APIRouter()
 

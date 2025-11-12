@@ -16,6 +16,7 @@ from app.schemas.paper import (
 )
 from app.core.exceptions import NotFoundException, AuthorizationException, ValidationException
 from app.services.paper_service import paper_service
+from app.schemas.paper import PaperAISettingsUpdate, PaperAISettingsResponse
 
 router = APIRouter()
 
@@ -301,4 +302,121 @@ async def get_papers_summary(
         "published_papers": status_counts.get(PaperStatus.PUBLISHED, 0),
         "active_papers": status_counts.get(PaperStatus.IN_PROGRESS, 0) +
                          status_counts.get(PaperStatus.DRAFT, 0)
+    }
+
+
+"""
+Paper AI Settings Endpoints - ADD TO app/api/v1/endpoints/papers.py
+Add these at the end of the file
+"""
+
+
+# Add these imports at the top:
+# from app.schemas.paper import PaperAISettingsUpdate, PaperAISettingsResponse
+
+"""
+Simplified Paper AI Settings Endpoints - NO GLOBAL SETTINGS
+Add to app/api/v1/endpoints/papers.py
+"""
+
+
+# ==================== SIMPLIFIED PAPER AI SETTINGS ====================
+
+@router.get("/{paper_id}/ai-settings")
+async def get_paper_ai_settings(
+        paper_id: str,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    """Get AI settings for a specific paper"""
+    paper = await paper_service.get_paper_by_id(db, paper_id)
+    if not paper:
+        raise NotFoundException("Paper")
+
+    if not paper.is_viewable_by(str(current_user.id)):
+        raise AuthorizationException("You don't have permission to view this paper")
+
+    # Get paper's AI settings (returns snake_case from DB)
+    settings = paper.get_ai_settings()
+
+    # ✅ Convert snake_case to camelCase for frontend
+    camel_case_settings = {
+        "labLevel": settings.get("lab_level", 7),
+        "personalLevel": settings.get("personal_level", 8),
+        "globalLevel": settings.get("global_level", 5),
+        "writingStyle": settings.get("writing_style", "academic"),
+        "contextDepth": settings.get("context_depth", "moderate"),
+        "researchFocus": settings.get("research_focus", []),
+        "suggestionsEnabled": settings.get("suggestions_enabled", True)
+    }
+
+    print(f"📤 [GET /{paper_id}/ai-settings] Returning settings:", camel_case_settings)
+
+    return {
+        "paperId": str(paper.id),
+        "settings": camel_case_settings
+    }
+
+
+@router.patch("/{paper_id}/ai-settings")
+async def update_paper_ai_settings(
+        paper_id: str,
+        settings_update: dict,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    """Update AI settings for a specific paper"""
+    paper = await paper_service.get_paper_by_id(db, paper_id)
+    if not paper:
+        raise NotFoundException("Paper")
+
+    if not paper.is_editable_by(str(current_user.id)):
+        raise AuthorizationException("You don't have permission to edit this paper")
+
+    print(f"🤖 [PATCH /{paper_id}/ai-settings] Received settings:", settings_update)
+
+    # ✅ Convert camelCase from frontend to snake_case for DB
+    snake_case_settings = {
+        "lab_level": settings_update.get("labLevel"),
+        "personal_level": settings_update.get("personalLevel"),
+        "global_level": settings_update.get("globalLevel"),
+        "writing_style": settings_update.get("writingStyle"),
+        "context_depth": settings_update.get("contextDepth"),
+        "research_focus": settings_update.get("researchFocus"),  # ✅ Array should pass through
+        "suggestions_enabled": settings_update.get("suggestionsEnabled")
+    }
+
+    # Remove None values
+    snake_case_settings = {k: v for k, v in snake_case_settings.items() if v is not None}
+
+    print(f"📝 Converting to snake_case:", snake_case_settings)
+    print(f"🔍 research_focus type: {type(snake_case_settings.get('research_focus'))}")
+    print(f"🔍 research_focus value: {snake_case_settings.get('research_focus')}")
+
+    # Update paper's AI settings
+    paper.update_ai_settings(snake_case_settings)
+
+    await db.commit()
+    await db.refresh(paper)
+
+    print(f"💾 After save - paper.ai_settings:", paper.ai_settings)
+
+    # Get updated settings and convert back to camelCase
+    updated_settings = paper.get_ai_settings()
+    camel_case_settings = {
+        "labLevel": updated_settings.get("lab_level", 7),
+        "personalLevel": updated_settings.get("personal_level", 8),
+        "globalLevel": updated_settings.get("global_level", 5),
+        "writingStyle": updated_settings.get("writing_style", "academic"),
+        "contextDepth": updated_settings.get("context_depth", "moderate"),
+        "researchFocus": updated_settings.get("research_focus", []),  # ✅ Return array
+        "suggestionsEnabled": updated_settings.get("suggestions_enabled", True)
+    }
+
+    print(f"✅ Paper AI settings updated successfully")
+    print(f"📤 Returning to frontend:", camel_case_settings)
+
+    return {
+        "paperId": str(paper.id),
+        "settings": camel_case_settings
     }

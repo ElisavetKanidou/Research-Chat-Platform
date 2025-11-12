@@ -1,5 +1,6 @@
 """
-Chat message database models
+Chat message database models - FIXED VERSION
+Remove duplicate PersonalizationSettings class
 """
 from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, JSON, Enum
 from sqlalchemy.orm import relationship
@@ -8,6 +9,8 @@ from datetime import datetime
 import enum
 
 from app.models.base import BaseModel
+# ✅ Import PersonalizationSettings from its own file
+from app.models.personalization_settings import PersonalizationSettings
 
 
 class MessageRole(str, enum.Enum):
@@ -84,41 +87,8 @@ class ChatAttachment(BaseModel):
         return f"<ChatAttachment(id={self.id}, type='{self.type}', name='{self.name}')>"
 
 
-class PersonalizationSettings(BaseModel):
-    """User AI personalization settings"""
-    __tablename__ = "personalization_settings"
-
-    # Personalization levels (1-5 scale)
-    lab_level = Column(String(10), default="3", nullable=False)
-    personal_level = Column(String(10), default="2", nullable=False)
-    global_level = Column(String(10), default="1", nullable=False)
-
-    # Writing preferences
-    writing_style = Column(String(50), default="academic", nullable=False)  # academic, concise, detailed, collaborative
-    context_depth = Column(String(20), default="moderate", nullable=False)  # minimal, moderate, comprehensive
-
-    # Research focus areas
-    research_focus = Column(JSON, nullable=True, default=[])
-    suggestions_enabled = Column(Boolean, default=True, nullable=False)
-
-    # User relationship
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), unique=True, nullable=False)
-    user = relationship("User", back_populates="personalization_settings")
-
-    def __repr__(self) -> str:
-        return f"<PersonalizationSettings(user_id={self.user_id}, style='{self.writing_style}')>"
-
-    def to_settings_dict(self) -> dict:
-        """Convert to frontend-compatible settings format"""
-        return {
-            "labLevel": int(self.lab_level),
-            "personalLevel": int(self.personal_level),
-            "globalLevel": int(self.global_level),
-            "writingStyle": self.writing_style,
-            "researchFocus": self.research_focus or [],
-            "suggestionsEnabled": self.suggestions_enabled,
-            "contextDepth": self.context_depth
-        }
+# ✅ PersonalizationSettings is now imported from app.models.personalization_settings
+# No duplicate definition needed here
 
 
 class ChatSession(BaseModel):

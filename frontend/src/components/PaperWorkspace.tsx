@@ -1,11 +1,13 @@
+// components/PaperWorkspace.tsx - UPDATED VERSION WITH AI SETTINGS TAB
+
 import React, { useState } from 'react';
-import { ArrowLeft, FileText, MessageSquare, BarChart3 } from 'lucide-react';
+import { ArrowLeft, FileText, MessageSquare, BarChart3, Settings } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 
 import CurrentPaperComponent from '../paper/CurrentPaperComponent';
-//import ResearchChatPlatform from '../paper/ResearchChatPlatform';
 import ResearchChatDemo from '../paper/ResearchChatDemo';
 import ResearchProgressComponent from '../paper/ResearchProgressComponent';
+import PaperAISettingsComponent from '../paper/PaperAISettings';  // ✅ NEW IMPORT
 
 interface PaperWorkspaceProps {
   onClose?: () => void;
@@ -13,7 +15,7 @@ interface PaperWorkspaceProps {
 
 const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
   const { activePaper, setActivePaper } = useGlobalContext();
-  const [workspaceTab, setWorkspaceTab] = useState<'paper' | 'chat' | 'progress'>('paper');
+  const [workspaceTab, setWorkspaceTab] = useState<'paper' | 'chat' | 'progress' | 'ai-settings'>('paper');  // ✅ Added 'ai-settings'
 
   const handleBack = () => {
     setActivePaper(null);
@@ -90,6 +92,7 @@ const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
             <FileText size={18} />
             <span>Paper Editor</span>
           </button>
+          
           <button
             onClick={() => setWorkspaceTab('chat')}
             className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
@@ -101,6 +104,7 @@ const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
             <MessageSquare size={18} />
             <span>AI Assistant</span>
           </button>
+          
           <button
             onClick={() => setWorkspaceTab('progress')}
             className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
@@ -112,6 +116,19 @@ const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
             <BarChart3 size={18} />
             <span>Progress</span>
           </button>
+          
+          {/* ✅ NEW: AI Settings Tab */}
+          <button
+            onClick={() => setWorkspaceTab('ai-settings')}
+            className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
+              workspaceTab === 'ai-settings'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Settings size={18} />
+            <span>AI Settings</span>
+          </button>
         </div>
       </div>
 
@@ -122,15 +139,23 @@ const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
             <CurrentPaperComponent />
           </div>
         )}
+        
         {workspaceTab === 'chat' && (
           <div className="h-full overflow-hidden">
-            {/*<ResearchChatPlatform paperContext={activePaper} />  */} 
             <ResearchChatDemo />
           </div>
         )}
+        
         {workspaceTab === 'progress' && (
           <div className="h-full overflow-y-auto p-6 bg-gray-50">
             <ResearchProgressComponent paperId={activePaper.id} />
+          </div>
+        )}
+        
+        {/* ✅ NEW: AI Settings Content */}
+        {workspaceTab === 'ai-settings' && (
+          <div className="h-full overflow-y-auto p-6 bg-gray-50">
+            <PaperAISettingsComponent paperId={activePaper.id} />
           </div>
         )}
       </div>

@@ -1,12 +1,11 @@
-// contexts/GlobalContext.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// contexts/GlobalContext.tsx - COMPLETELY FIXED VERSION
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Paper } from '../types/paper';
 import type { User } from '../types/user';
 import { usePaperManagement } from '../hooks/usePaperManagement';
 import { authService } from '../services/authService';
 import type { UserResponse } from '../types/api';
 import { paperService } from '../services/paperService';
-
 
 // Local interfaces to avoid conflicts
 export interface AppNotification {
@@ -76,11 +75,7 @@ export const useGlobalContext = () => {
   return context;
 };
 
-// ΑΝΤΙΚΑΤΑΣΤΗΣΤΕ τη συνάρτηση convertUserResponseToUser στο GlobalContext.tsx
-// (Γραμμές περίπου 70-120)
-
 const convertUserResponseToUser = (userData: UserResponse): User => {
-  // Safe access to nested properties with fallbacks
   const researchInterests = userData.personalInfo?.researchInterests || 
                             (userData as any).research_interests || 
                             [];
@@ -144,7 +139,6 @@ const convertUserResponseToUser = (userData: UserResponse): User => {
   };
 };
 
-
 export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Paper management from custom hook
   const paperManagement = usePaperManagement();
@@ -207,6 +201,28 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   });
 
+  // ✅ CRITICAL FIX: Memoize notification functions to prevent infinite loops
+  const addNotification = useCallback((notification: Omit<AppNotification, 'id' | 'timestamp'>) => {
+    const newNotification: AppNotification = {
+      ...notification,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date(),
+    };
+
+    setNotifications(prev => [...prev, newNotification]);
+
+    // Auto remove notification after 5 seconds if autoRemove is not explicitly false
+    if (notification.autoRemove !== false) {
+      setTimeout(() => {
+        setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
+      }, 5000);
+    }
+  }, []);
+
+  const removeNotification = useCallback((id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }, []);
+
   // Initialize user data
   useEffect(() => {
     const initializeUser = async () => {
@@ -264,35 +280,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [sidebarCollapsed]);
 
-  // Notification management
-  const addNotification = (notification: Omit<AppNotification, 'id' | 'timestamp'>) => {
-    const newNotification: AppNotification = {
-      ...notification,
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: new Date(),
-    };
-
-    setNotifications(prev => [...prev, newNotification]);
-
-    // Auto remove notification after 5 seconds if autoRemove is not explicitly false
-    if (notification.autoRemove !== false) {
-      setTimeout(() => {
-        removeNotification(newNotification.id);
-      }, 5000);
-    }
-  };
-
-  const removeNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-
   // Settings management
-  const updateSettings = (updates: Partial<AppGlobalSettings>) => {
+  const updateSettings = useCallback((updates: Partial<AppGlobalSettings>) => {
     setSettings(prev => ({ ...prev, ...updates }));
-  };
+  }, []);
 
   // Enhanced paper operations with notifications
-  const createPaperWithNotification = async (paperData: Partial<Paper>): Promise<Paper> => {
+  const createPaperWithNotification = useCallback(async (paperData: Partial<Paper>): Promise<Paper> => {
     try {
       const paper = await paperManagement.createPaper(paperData);
       addNotification({
@@ -311,12 +305,12 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       throw error;
     }
-  };
+  }, [paperManagement, addNotification]);
 
-  const updatePaperWithNotification = async (paperId: string, updates: Partial<Paper>): Promise<Paper> => {
+  const updatePaperWithNotification = useCallback(async (paperId: string, updates: Partial<Paper>): Promise<Paper> => {
     try {
       const paper = await paperManagement.updatePaper(paperId, updates);
-      await refreshPapers();
+      await paperManagement.loadPapers();
       if (settings.enableNotifications) {
         addNotification({
           type: 'success',
@@ -336,9 +330,9 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       throw error;
     }
-  };
+  }, [paperManagement, settings.enableNotifications, addNotification]);
 
-  const deletePaperWithNotification = async (paperId: string): Promise<void> => {
+  const deletePaperWithNotification = useCallback(async (paperId: string): Promise<void> => {
     try {
       await paperManagement.deletePaper(paperId);
       addNotification({
@@ -356,7 +350,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       throw error;
     }
-  };
+  }, [paperManagement, addNotification]);
 
   // Auto-save functionality
   useEffect(() => {
@@ -408,7 +402,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [searchQuery, paperManagement.papers]);
 
   // Enhanced setActivePaper to load full paper data
-  const setActivePaperEnhanced = async (paper: Paper | null) => {
+  const setActivePaperEnhanced = useCallback(async (paper: Paper | null) => {
     if (paper) {
       try {
         // Load full paper with sections from backend
@@ -421,9 +415,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } else {
       paperManagement.setActivePaper(null);
     }
-  };
+  }, [paperManagement]);
+
   // Refresh active paper from backend
-  const refreshActivePaper = async () => {
+  const refreshActivePaper = useCallback(async () => {
     if (paperManagement.activePaper) {
       try {
         const refreshedPaper = await paperService.getPaper(paperManagement.activePaper.id);
@@ -432,12 +427,11 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         console.error('Failed to refresh active paper:', error);
       }
     }
-  };
+  }, [paperManagement]);
 
-  // Μετά το refreshActivePaper (γραμμή ~395)
-  const refreshPapers = async () => {
+  const refreshPapers = useCallback(async () => {
     await paperManagement.loadPapers();
-  };
+  }, [paperManagement]);
 
   const contextValue: GlobalContextType = {
     // Paper management
@@ -445,7 +439,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     activePaper: paperManagement.activePaper,
     loading: paperManagement.loading,
     error: paperManagement.error,
-   
     
     // Enhanced paper operations
     createPaper: createPaperWithNotification,
@@ -487,5 +480,4 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   );
 };
 
-// Export only the context types with unique names
 export type { GlobalContextType };

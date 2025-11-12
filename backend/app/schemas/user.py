@@ -1,11 +1,15 @@
 """
-User schemas (app/schemas/user.py)
+User schemas - COMPLETE VERSION WITH FIXED PREFERENCES HANDLING
+app/schemas/user.py
 """
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, EmailStr, validator, field_validator  # ← Πρόσθεσε field_validator
+from pydantic import BaseModel, Field, EmailStr, field_validator, model_validator
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
+import json
+
+# ==================== ENUMS ====================
 
 class Theme(str, Enum):
     LIGHT = "light"
@@ -39,229 +43,193 @@ class ReminderFrequency(str, Enum):
     MONTHLY = "monthly"
 
 
-# Personal Info Schemas
-class PersonalInfoBase(BaseModel):
-    name: str = Field(..., min_length=2, max_length=255)
-    email: EmailStr
-    affiliation: Optional[str] = Field(None, max_length=255)
-    research_interests: List[str] = []
-    orcid_id: Optional[str] = Field(None, max_length=50)
-    bio: Optional[str] = Field(None, max_length=1000)
-    website: Optional[str] = Field(None, max_length=500)
-    location: Optional[str] = Field(None, max_length=255)
+# ==================== NOTIFICATION PREFERENCES ====================
 
-    class Config:
-        fields = {
-            'research_interests': 'researchInterests',
-            'orcid_id': 'orcidId'
-        }
-
-
-class PersonalInfoUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=2, max_length=255)
-    affiliation: Optional[str] = Field(None, max_length=255)
-    research_interests: Optional[List[str]] = None
-    orcid_id: Optional[str] = Field(None, max_length=50)
-    bio: Optional[str] = Field(None, max_length=1000)
-    website: Optional[str] = Field(None, max_length=500)
-    location: Optional[str] = Field(None, max_length=255)
-
-    class Config:
-        fields = {
-            'research_interests': 'researchInterests',
-            'orcid_id': 'orcidId'
-        }
-
-
-# Notification Preferences
 class NotificationPreferences(BaseModel):
-    email_notifications: bool = True
-    deadline_reminders: bool = True
-    collaboration_updates: bool = True
-    ai_suggestions: bool = True
-    weekly_reports: bool = False
-    push_notifications: bool = True
-    reminder_frequency: ReminderFrequency = ReminderFrequency.WEEKLY
+    """Notification preferences - accepts both camelCase and snake_case"""
+    email_notifications: Optional[bool] = Field(default=None, alias="emailNotifications")
+    deadline_reminders: Optional[bool] = Field(default=None, alias="deadlineReminders")
+    collaboration_updates: Optional[bool] = Field(default=None, alias="collaborationUpdates")
+    ai_suggestions: Optional[bool] = Field(default=None, alias="aiSuggestions")
+    weekly_reports: Optional[bool] = Field(default=None, alias="weeklyReports")
+    push_notifications: Optional[bool] = Field(default=None, alias="pushNotifications")
+    reminder_frequency: Optional[str] = Field(default=None, alias="reminderFrequency")
 
-    class Config:
-        fields = {
-            'email_notifications': 'emailNotifications',
-            'deadline_reminders': 'deadlineReminders',
-            'collaboration_updates': 'collaborationUpdates',
-            'ai_suggestions': 'aiSuggestions',
-            'weekly_reports': 'weeklyReports',
-            'push_notifications': 'pushNotifications',
-            'reminder_frequency': 'reminderFrequency'
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "example": {
+                "emailNotifications": True,
+                "deadlineReminders": True,
+                "collaborationUpdates": True
+            }
         }
+    }
 
 
-# Privacy Settings
+# ==================== PRIVACY SETTINGS ====================
+
 class PrivacySettings(BaseModel):
-    profile_visibility: ProfileVisibility = ProfileVisibility.PRIVATE
-    share_analytics: bool = False
-    data_sync_enabled: bool = True
-    allow_research_sharing: bool = False
-    tracking_opt_out: bool = False
+    """Privacy settings - accepts both camelCase and snake_case"""
+    profile_visibility: Optional[str] = Field(default=None, alias="profileVisibility")
+    share_analytics: Optional[bool] = Field(default=None, alias="shareAnalytics")
+    data_sync_enabled: Optional[bool] = Field(default=None, alias="dataSyncEnabled")
+    allow_research_sharing: Optional[bool] = Field(default=None, alias="allowResearchSharing")
+    tracking_opt_out: Optional[bool] = Field(default=None, alias="trackingOptOut")
 
-    class Config:
-        fields = {
-            'profile_visibility': 'profileVisibility',
-            'share_analytics': 'shareAnalytics',
-            'data_sync_enabled': 'dataSyncEnabled',
-            'allow_research_sharing': 'allowResearchSharing',
-            'tracking_opt_out': 'trackingOptOut'
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "example": {
+                "profileVisibility": "private",
+                "shareAnalytics": False
+            }
         }
+    }
 
 
-# AI Personalization Settings
+# ==================== AI PERSONALIZATION ====================
+
 class AIPersonalizationSettings(BaseModel):
-    lab_level: int = Field(default=3, ge=1, le=5)
-    personal_level: int = Field(default=2, ge=1, le=5)
-    global_level: int = Field(default=1, ge=1, le=5)
-    writing_style: str = "academic"
-    research_focus: List[str] = []
-    suggestions_enabled: bool = True
-    context_depth: str = "moderate"
+    """AI Personalization settings - accepts both camelCase and snake_case"""
+    lab_level: Optional[int] = Field(default=None, alias="labLevel", ge=1, le=10)
+    personal_level: Optional[int] = Field(default=None, alias="personalLevel", ge=1, le=10)
+    global_level: Optional[int] = Field(default=None, alias="globalLevel", ge=1, le=10)
+    writing_style: Optional[str] = Field(default=None, alias="writingStyle")
+    context_depth: Optional[str] = Field(default=None, alias="contextDepth")
+    research_focus: Optional[List[str]] = Field(default=None, alias="researchFocus")
+    suggestions_enabled: Optional[bool] = Field(default=None, alias="suggestionsEnabled")
 
-    class Config:
-        fields = {
-            'lab_level': 'labLevel',
-            'personal_level': 'personalLevel',
-            'global_level': 'globalLevel',
-            'writing_style': 'writingStyle',
-            'research_focus': 'researchFocus',
-            'suggestions_enabled': 'suggestionsEnabled',
-            'context_depth': 'contextDepth'
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "example": {
+                "labLevel": 8,
+                "personalLevel": 9,
+                "globalLevel": 6,
+                "writingStyle": "academic"
+            }
         }
+    }
 
 
-# User Preferences
-class UserPreferences(BaseModel):
-    theme: Theme = Theme.LIGHT
-    language: str = "en"
-    timezone: str = "UTC"
-    date_format: str = "MM/dd/yyyy"
-    default_word_count: int = Field(default=8000, gt=0)
-    auto_save: bool = True
-    notifications: NotificationPreferences = NotificationPreferences()
-    privacy: PrivacySettings = PrivacySettings()
-    ai_personalization: AIPersonalizationSettings = AIPersonalizationSettings()
-
-    class Config:
-        fields = {
-            'date_format': 'dateFormat',
-            'default_word_count': 'defaultWordCount',
-            'auto_save': 'autoSave',
-            'ai_personalization': 'aiPersonalization'
-        }
-
+# ==================== USER PREFERENCES UPDATE ====================
 
 class UserPreferencesUpdate(BaseModel):
-    theme: Optional[Theme] = None
+    """
+    Schema for updating user preferences
+
+    CRITICAL: This accepts BOTH camelCase (from frontend) and snake_case (Python)
+    All fields are optional to support partial updates
+    """
+    # Basic preferences
+    theme: Optional[str] = None
     language: Optional[str] = None
     timezone: Optional[str] = None
-    date_format: Optional[str] = None
-    default_word_count: Optional[int] = Field(None, gt=0)
-    auto_save: Optional[bool] = None
+    date_format: Optional[str] = Field(default=None, alias="dateFormat")
+    default_word_count: Optional[int] = Field(default=None, alias="defaultWordCount", gt=0)
+    auto_save: Optional[bool] = Field(default=None, alias="autoSave")
+
+    # Nested preferences (can be dict or Pydantic model)
     notifications: Optional[NotificationPreferences] = None
     privacy: Optional[PrivacySettings] = None
-    ai_personalization: Optional[AIPersonalizationSettings] = None
+    ai_personalization: Optional[AIPersonalizationSettings] = Field(default=None, alias="aiPersonalization")
 
-    class Config:
-        fields = {
-            'date_format': 'dateFormat',
-            'default_word_count': 'defaultWordCount',
-            'auto_save': 'autoSave',
-            'ai_personalization': 'aiPersonalization'
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "example": {
+                "theme": "dark",
+                "language": "en",
+                "dateFormat": "MM/DD/YYYY",
+                "defaultWordCount": 8000,
+                "notifications": {
+                    "emailNotifications": True,
+                    "deadlineReminders": True
+                },
+                "aiPersonalization": {
+                    "labLevel": 8,
+                    "personalLevel": 9,
+                    "globalLevel": 6
+                }
+            }
         }
+    }
 
 
-# Subscription Feature
-class SubscriptionFeature(BaseModel):
-    name: str
-    enabled: bool
-    limit: Optional[int] = None
-    used: Optional[int] = None
+# ==================== PERSONAL INFO ====================
 
-
-# User Subscription
-class UserSubscription(BaseModel):
-    plan: SubscriptionPlan = SubscriptionPlan.FREE
-    status: SubscriptionStatus = SubscriptionStatus.ACTIVE
-    start_date: datetime
-    end_date: Optional[datetime] = None
-    features: List[SubscriptionFeature] = []
-
-    class Config:
-        fields = {
-            'start_date': 'startDate',
-            'end_date': 'endDate'
-        }
-
-
-# User Base Schema
-class UserBase(BaseModel):
-    email: EmailStr
-    name: str = Field(..., min_length=2, max_length=255)
-
-
-class UserCreate(UserBase):
-    password: str = Field(..., min_length=8, max_length=100)
-    affiliation: Optional[str] = Field(None, max_length=255)
-    research_interests: List[str] = []
-
-    class Config:
-        fields = {
-            'research_interests': 'researchInterests'
-        }
-
-
-class UserUpdate(BaseModel):
+class PersonalInfoUpdate(BaseModel):
+    """Schema for updating personal information"""
     name: Optional[str] = Field(None, min_length=2, max_length=255)
-    avatar_url: Optional[str] = Field(None, max_length=500)
-    bio: Optional[str] = Field(None, max_length=1000)
     affiliation: Optional[str] = Field(None, max_length=255)
-    orcid_id: Optional[str] = Field(None, max_length=50)
+    research_interests: Optional[List[str]] = Field(default=None, alias="researchInterests")
+    orcid_id: Optional[str] = Field(None, max_length=50, alias="orcidId")
+    bio: Optional[str] = Field(None, max_length=1000)
     website: Optional[str] = Field(None, max_length=500)
     location: Optional[str] = Field(None, max_length=255)
-    research_interests: Optional[List[str]] = None
+
+    model_config = {"populate_by_name": True}
+
+
+# ==================== USER UPDATE ====================
+
+class UserUpdate(BaseModel):
+    """Schema for updating user profile"""
+    name: Optional[str] = Field(None, min_length=2, max_length=255)
+    avatar_url: Optional[str] = Field(None, max_length=500, alias="avatarUrl")
+    bio: Optional[str] = Field(None, max_length=1000)
+    affiliation: Optional[str] = Field(None, max_length=255)
+    orcid_id: Optional[str] = Field(None, max_length=50, alias="orcidId")
+    website: Optional[str] = Field(None, max_length=500)
+    location: Optional[str] = Field(None, max_length=255)
+    research_interests: Optional[List[str]] = Field(default=None, alias="researchInterests")
     preferences: Optional[UserPreferencesUpdate] = None
 
-    class Config:
-        fields = {
-            'avatar_url': 'avatarUrl',
-            'orcid_id': 'orcidId',
-            'research_interests': 'researchInterests'
-        }
+    model_config = {"populate_by_name": True}
 
+
+# ==================== USER CREATE ====================
+
+class UserCreate(BaseModel):
+    """Schema for creating a new user"""
+    email: EmailStr
+    name: str = Field(..., min_length=2, max_length=255)
+    password: str = Field(..., min_length=8, max_length=100)
+    affiliation: Optional[str] = Field(None, max_length=255)
+    research_interests: Optional[List[str]] = Field(default=None, alias="researchInterests")
+
+    model_config = {"populate_by_name": True}
+
+
+# ==================== USER RESPONSE ====================
 
 class UserResponse(BaseModel):
+    """Complete user profile response"""
     id: str
     email: EmailStr
     name: str
-    avatar_url: Optional[str] = None
+    avatar_url: Optional[str] = Field(default=None, alias="avatarUrl")
     bio: Optional[str] = None
     affiliation: Optional[str] = None
-    orcid_id: Optional[str] = None
+    orcid_id: Optional[str] = Field(default=None, alias="orcidId")
     website: Optional[str] = None
     location: Optional[str] = None
-    research_interests: List[str] = []
+    research_interests: List[str] = Field(default_factory=list, alias="researchInterests")
 
-    is_active: bool
-    is_verified: bool
-    created_at: datetime
-    last_login_at: Optional[datetime] = None
+    is_active: bool = Field(alias="isActive")
+    is_verified: bool = Field(alias="isVerified")
+    created_at: datetime = Field(alias="createdAt")
+    updated_at: datetime = Field(alias="updatedAt")
+    last_login_at: Optional[datetime] = Field(default=None, alias="lastLoginAt")
 
     # Subscription info
-    subscription_plan: SubscriptionPlan
-    subscription_status: SubscriptionStatus
+    subscription_plan: str = Field(alias="subscriptionPlan")
+    subscription_status: str = Field(alias="subscriptionStatus")
 
-    # For frontend compatibility, we include these nested objects
-    personal_info: Optional[Dict[str, Any]] = None
+    # Preferences as dict (will be returned as camelCase JSON)
     preferences: Optional[Dict[str, Any]] = None
-    subscription: Optional[Dict[str, Any]] = None
 
-    # ← ΠΡΟΣΘΕΣΕ ΑΥΤΟ ΕΔΩ (πριν το Config)
     @field_validator('id', mode='before')
     @classmethod
     def convert_uuid_to_str(cls, v):
@@ -270,56 +238,86 @@ class UserResponse(BaseModel):
             return str(v)
         return v
 
-    class Config:
-        from_attributes = True
-        fields = {
-            'avatar_url': 'avatarUrl',
-            'orcid_id': 'orcidId',
-            'research_interests': 'researchInterests',
-            'is_active': 'isActive',
-            'is_verified': 'isVerified',
-            'created_at': 'createdAt',
-            'last_login_at': 'lastLoginAt',
-            'subscription_plan': 'subscriptionPlan',
-            'subscription_status': 'subscriptionStatus',
-            'personal_info': 'personalInfo'
-        }
+    @field_validator('preferences', mode='before')
+    @classmethod
+    def parse_preferences(cls, v):
+        """Parse preferences JSON from database"""
+        if v is None:
+            return {
+                "theme": "light",
+                "language": "en",
+                "timezone": "UTC",
+                "dateFormat": "MM/dd/yyyy",
+                "defaultWordCount": 8000,
+                "autoSave": True,
+                "notifications": {
+                    "emailNotifications": True,
+                    "deadlineReminders": True,
+                    "collaborationUpdates": True,
+                    "aiSuggestions": False,
+                    "weeklyReports": True,
+                    "pushNotifications": True,
+                    "reminderFrequency": "weekly"
+                },
+                "privacy": {
+                    "profileVisibility": "private",
+                    "shareAnalytics": False,
+                    "dataSyncEnabled": True,
+                    "allowResearchSharing": False,
+                    "trackingOptOut": False
+                },
+                "aiPersonalization": {
+                    "labLevel": 7,
+                    "personalLevel": 8,
+                    "globalLevel": 5,
+                    "writingStyle": "academic",
+                    "researchFocus": [],
+                    "suggestionsEnabled": True,
+                    "contextDepth": "moderate"
+                }
+            }
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except:
+                return {}
+        return {}
 
-    @validator('personal_info', pre=True, always=True)
-    def build_personal_info(cls, v, values):
-        """Build personal_info object for frontend compatibility"""
-        return {
-            'name': values.get('name'),
-            'email': values.get('email'),
-            'affiliation': values.get('affiliation'),
-            'researchInterests': values.get('research_interests', []),
-            'orcidId': values.get('orcid_id'),
-            'bio': values.get('bio'),
-            'website': values.get('website'),
-            'location': values.get('location'),
-        }
+    @field_validator('research_interests', mode='before')
+    @classmethod
+    def parse_research_interests(cls, v):
+        """Parse research_interests JSON from database"""
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except:
+                return []
+        return []
 
-    @validator('subscription', pre=True, always=True)
-    def build_subscription(cls, v, values):
-        """Build subscription object for frontend compatibility"""
-        return {
-            'plan': values.get('subscription_plan'),
-            'status': values.get('subscription_status'),
-            'startDate': values.get('created_at'),  # Simplified
-            'features': [],
-        }
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
 
+
+# ==================== PUBLIC PROFILE ====================
 
 class UserPublicResponse(BaseModel):
     """Public user profile (limited information)"""
     id: str
     name: str
-    avatar_url: Optional[str] = None
+    avatar_url: Optional[str] = Field(default=None, alias="avatarUrl")
     bio: Optional[str] = None
     affiliation: Optional[str] = None
     location: Optional[str] = None
-    research_interests: List[str] = []
-    created_at: datetime
+    research_interests: List[str] = Field(default_factory=list, alias="researchInterests")
+    created_at: datetime = Field(alias="createdAt")
 
     @field_validator('id', mode='before')
     @classmethod
@@ -329,117 +327,143 @@ class UserPublicResponse(BaseModel):
             return str(v)
         return v
 
-    class Config:
-        from_attributes = True
-        fields = {
-            'avatar_url': 'avatarUrl',
-            'research_interests': 'researchInterests',
-            'created_at': 'createdAt'
-        }
+    @field_validator('research_interests', mode='before')
+    @classmethod
+    def parse_research_interests(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except:
+                return []
+        return []
 
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
+
+
+# ==================== USER STATISTICS ====================
 
 class UserStatsResponse(BaseModel):
     """User statistics and analytics"""
-    total_papers: int
-    published_papers: int
-    total_words: int
+    total_papers: int = Field(alias="totalPapers")
+    published_papers: int = Field(alias="publishedPapers")
+    total_words: int = Field(alias="totalWords")
     collaborators: int
-    research_areas: List[str]
-    avg_completion_time: Optional[float] = None
-    productivity_score: Optional[float] = None
-    last_updated: datetime
+    research_areas: List[str] = Field(alias="researchAreas")
+    avg_completion_time: Optional[float] = Field(default=None, alias="avgCompletionTime")
+    productivity_score: Optional[float] = Field(default=None, alias="productivityScore")
+    last_updated: datetime = Field(alias="lastUpdated")
 
-    class Config:
-        fields = {
-            'total_papers': 'totalPapers',
-            'published_papers': 'publishedPapers',
-            'total_words': 'totalWords',
-            'research_areas': 'researchAreas',
-            'avg_completion_time': 'avgCompletionTime',
-            'productivity_score': 'productivityScore',
-            'last_updated': 'lastUpdated'
-        }
+    model_config = {"populate_by_name": True}
 
+
+# ==================== USER ACTIVITY ====================
 
 class UserActivityResponse(BaseModel):
     """User activity log entry"""
     id: str
     action: str
     resource: str
-    resource_id: str
+    resource_id: str = Field(alias="resourceId")
     metadata: Optional[Dict[str, Any]] = None
     timestamp: datetime
 
-    class Config:
-        from_attributes = True
-        fields = {
-            'resource_id': 'resourceId'
-        }
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
 
+
+# ==================== API KEYS ====================
 
 class APIKeyCreate(BaseModel):
+    """API key creation request"""
     name: str = Field(..., min_length=1, max_length=255)
     permissions: List[str] = []
-    expires_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = Field(default=None, alias="expiresAt")
 
-    class Config:
-        fields = {
-            'expires_at': 'expiresAt'
-        }
+    model_config = {"populate_by_name": True}
 
 
 class APIKeyResponse(BaseModel):
+    """API key response"""
     id: str
     name: str
     key: str  # Only shown once during creation
     permissions: List[str]
-    created_at: datetime
-    last_used: Optional[datetime] = None
-    is_active: bool
-    expires_at: Optional[datetime] = None
+    created_at: datetime = Field(alias="createdAt")
+    last_used: Optional[datetime] = Field(default=None, alias="lastUsed")
+    is_active: bool = Field(alias="isActive")
+    expires_at: Optional[datetime] = Field(default=None, alias="expiresAt")
 
-    class Config:
-        from_attributes = True
-        fields = {
-            'created_at': 'createdAt',
-            'last_used': 'lastUsed',
-            'is_active': 'isActive',
-            'expires_at': 'expiresAt'
-        }
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
 
+
+# ==================== INTEGRATIONS ====================
 
 class UserIntegrationResponse(BaseModel):
     """Third-party service integration"""
     id: str
     service: str
-    is_connected: bool
-    last_sync: Optional[datetime] = None
-    created_at: datetime
+    is_connected: bool = Field(alias="isConnected")
+    last_sync: Optional[datetime] = Field(default=None, alias="lastSync")
+    created_at: datetime = Field(alias="createdAt")
 
-    class Config:
-        from_attributes = True
-        fields = {
-            'is_connected': 'isConnected',
-            'last_sync': 'lastSync',
-            'created_at': 'createdAt'
-        }
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
 
+
+# ==================== TWO-FACTOR AUTH ====================
 
 class TwoFactorSetupResponse(BaseModel):
-    qr_code: str
+    """2FA setup response"""
+    qr_code: str = Field(alias="qrCode")
     secret: str
+    backup_codes: List[str] = Field(default_factory=list, alias="backupCodes")
 
-    class Config:
-        fields = {
-            'qr_code': 'qrCode'
-        }
+    model_config = {"populate_by_name": True}
 
 
 class TwoFactorVerifyRequest(BaseModel):
+    """2FA verification request"""
     code: str = Field(..., min_length=6, max_length=6)
 
 
-# Update forward references
-from app.schemas.auth import LoginResponse
+# ==================== PASSWORD CHANGE ====================
 
-LoginResponse.model_rebuild()
+class PasswordChangeRequest(BaseModel):
+    """Password change request"""
+    current_password: str = Field(..., min_length=8, alias="currentPassword")
+    new_password: str = Field(..., min_length=8, max_length=100, alias="newPassword")
+
+    model_config = {"populate_by_name": True}
+
+
+# ==================== EMAIL CHANGE ====================
+
+class EmailChangeRequest(BaseModel):
+    """Email change request"""
+    new_email: EmailStr = Field(alias="newEmail")
+    password: str
+
+    model_config = {"populate_by_name": True}
+
+
+# ==================== ACCOUNT DELETION ====================
+
+class AccountDeletionRequest(BaseModel):
+    """Account deletion request"""
+    password: str
+    confirmation: str = Field(..., pattern="^DELETE MY ACCOUNT$")
+    reason: Optional[str] = None

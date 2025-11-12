@@ -8,7 +8,6 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-
 class PaperStatusEnum(str, Enum):
     DRAFT = "draft"
     IN_PROGRESS = "in-progress"
@@ -327,3 +326,63 @@ class PaperExportRequest(BaseModel):
     include_sections: List[str] = []
     include_comments: bool = False
     include_references: bool = True
+
+
+"""
+Paper AI Settings Schemas - ADD TO app/schemas/paper.py
+Add these at the end of the file
+"""
+
+
+# ==================== PAPER AI SETTINGS ====================
+
+class PaperAISettings(BaseModel):
+    """AI Personalization settings for a specific paper"""
+    use_global_settings: bool = Field(default=True, alias="useGlobalSettings")
+    lab_level: Optional[int] = Field(default=None, alias="labLevel", ge=1, le=10)
+    personal_level: Optional[int] = Field(default=None, alias="personalLevel", ge=1, le=10)
+    global_level: Optional[int] = Field(default=None, alias="globalLevel", ge=1, le=10)
+    writing_style: Optional[str] = Field(default=None, alias="writingStyle")
+    context_depth: Optional[str] = Field(default=None, alias="contextDepth")
+    research_focus: Optional[List[str]] = Field(default=None, alias="researchFocus")
+    suggestions_enabled: Optional[bool] = Field(default=None, alias="suggestionsEnabled")
+
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "example": {
+                "useGlobalSettings": False,
+                "labLevel": 8,
+                "personalLevel": 9,
+                "globalLevel": 6,
+                "writingStyle": "detailed",
+                "contextDepth": "comprehensive",
+                "researchFocus": ["quantum computing", "optimization"],
+                "suggestionsEnabled": True
+            }
+        }
+    }
+
+
+class PaperAISettingsUpdate(BaseModel):
+    """Update AI settings for a paper"""
+    use_global_settings: Optional[bool] = Field(default=None, alias="useGlobalSettings")
+    lab_level: Optional[int] = Field(default=None, alias="labLevel", ge=1, le=10)
+    personal_level: Optional[int] = Field(default=None, alias="personalLevel", ge=1, le=10)
+    global_level: Optional[int] = Field(default=None, alias="globalLevel", ge=1, le=10)
+    writing_style: Optional[str] = Field(default=None, alias="writingStyle")
+    context_depth: Optional[str] = Field(default=None, alias="contextDepth")
+    research_focus: Optional[List[str]] = Field(default=None, alias="researchFocus")
+    suggestions_enabled: Optional[bool] = Field(default=None, alias="suggestionsEnabled")
+
+    model_config = {"populate_by_name": True}
+
+
+class PaperAISettingsResponse(BaseModel):
+    """Response with paper's AI settings (merged with global if needed)"""
+    paper_id: str = Field(alias="paperId")
+    is_using_global: bool = Field(alias="isUsingGlobal")
+    settings: Dict[str, Any]
+    global_settings: Optional[Dict[str, Any]] = Field(default=None, alias="globalSettings")
+
+    model_config = {"populate_by_name": True}

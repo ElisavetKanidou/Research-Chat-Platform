@@ -1,8 +1,10 @@
 """
-Paper database model
+Paper database model - COMPLETE CLEAN VERSION
+backend/app/models/paper.py
 """
 from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, ForeignKey, JSON, Enum
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import enum
@@ -53,6 +55,21 @@ class Paper(BaseModel):
     co_authors = Column(JSON, nullable=True, default=[])  # Array of co-author names
     is_public = Column(Boolean, default=False, nullable=False)
 
+    # ✅ AI Personalization Settings (per-paper, no global dependency)
+    ai_settings = Column(JSON, nullable=True, default=None)
+    """
+    Structure (simplified - no global settings reference):
+    {
+        "lab_level": 7,
+        "personal_level": 8,
+        "global_level": 5,
+        "writing_style": "academic",
+        "context_depth": "moderate",
+        "research_focus": ["quantum computing", "optimization"],
+        "suggestions_enabled": true
+    }
+    """
+
     # Publication information
     doi = Column(String(255), nullable=True)
     journal = Column(String(255), nullable=True)
@@ -64,28 +81,54 @@ class Paper(BaseModel):
     owner = relationship("User", back_populates="papers")
 
     # Relationships
-    sections = relationship("PaperSection", back_populates="paper", cascade="all, delete-orphan",
-                            order_by="PaperSection.order")
+    sections = relationship(
+        "PaperSection",
+        back_populates="paper",
+        cascade="all, delete-orphan",
+        order_by="PaperSection.order"
+    )
     collaborators = relationship(
         "PaperCollaborator",
         back_populates="paper",
         foreign_keys="PaperCollaborator.paper_id",
         cascade="all, delete-orphan"
     )
-    chat_messages = relationship("ChatMessage", back_populates="paper", cascade="all, delete-orphan")
-    versions = relationship("PaperVersion", back_populates="paper", cascade="all, delete-orphan")
-    comments = relationship("PaperComment", back_populates="paper", cascade="all, delete-orphan")
-    analytics = relationship("PaperAnalytics", back_populates="paper", uselist=False, cascade="all, delete-orphan")
+    chat_messages = relationship(
+        "ChatMessage",
+        back_populates="paper",
+        cascade="all, delete-orphan"
+    )
+    versions = relationship(
+        "PaperVersion",
+        back_populates="paper",
+        cascade="all, delete-orphan"
+    )
+    comments = relationship(
+        "PaperComment",
+        back_populates="paper",
+        cascade="all, delete-orphan"
+    )
+    analytics = relationship(
+        "PaperAnalytics",
+        back_populates="paper",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Paper(id={self.id}, title='{self.title}', status='{self.status}')>"
+
+    # ==================== PROGRESS & WORD COUNT ====================
 
     def calculate_progress(self) -> int:
         """Calculate paper progress based on section completion"""
         if not self.sections:
             return 0
 
-        completed_sections = sum(1 for section in self.sections if section.status == SectionStatus.COMPLETED)
+        completed_sections = sum(
+            1 for section in self.sections
+            if section.status == SectionStatus.COMPLETED
+        )
         total_sections = len(self.sections)
 
         if total_sections == 0:
@@ -106,6 +149,67 @@ class Paper(BaseModel):
         if self.target_word_count == 0:
             return 0.0
         return min(100.0, (self.current_word_count / self.target_word_count) * 100)
+
+    # ==================== AI SETTINGS ====================
+
+    def get_ai_settings(self) -> dict:
+        """
+        Get AI settings for this paper
+
+        Returns:
+            Dictionary of AI settings for this paper
+        """
+        if not self.ai_settings:
+            # Return default settings
+            default_settings = {
+                "lab_level": 7,
+                "personal_level": 8,
+                "global_level": 5,
+                "writing_style": "academic",
+                "context_depth": "moderate",
+                "research_focus": [],
+                "suggestions_enabled": True
+            }
+            print(f"📋 [Paper.get_ai_settings] Returning defaults")
+            return default_settings
+
+        # Ensure research_focus is always an array
+        if "research_focus" not in self.ai_settings:
+            self.ai_settings["research_focus"] = []
+
+        print(f"📋 [Paper.get_ai_settings] Returning: {self.ai_settings}")
+        return self.ai_settings
+
+    def update_ai_settings(self, settings: dict) -> None:
+        """
+        Update paper's AI settings
+
+        Args:
+            settings: Dictionary of AI settings to update
+        """
+        print(f"🔧 [Paper.update_ai_settings] BEFORE: {self.ai_settings}")
+        print(f"📥 [Paper.update_ai_settings] Incoming: {settings}")
+
+        # Initialize if needed
+        if not self.ai_settings:
+            self.ai_settings = {}
+
+        # Deep merge settings - handle each field explicitly
+        for key, value in settings.items():
+            if value is not None:  # Only update non-None values
+                self.ai_settings[key] = value
+                print(f"  ✅ Set {key} = {value} (type: {type(value)})")
+
+        # ✅ CRITICAL: Tell SQLAlchemy the JSON column changed!
+        flag_modified(self, "ai_settings")
+        print(f"🚩 [Paper.update_ai_settings] Called flag_modified")
+
+        # Update timestamp
+        self.updated_at = datetime.utcnow()
+
+        print(f"🔧 [Paper.update_ai_settings] AFTER: {self.ai_settings}")
+
+    # ==================== COLLABORATION ====================
 
     def add_collaborator(self, user_id: str, role: str = "editor") -> None:
         """Add a collaborator to the paper"""
@@ -144,12 +248,16 @@ class Paper(BaseModel):
 
         return False
 
+    # ==================== UTILITY METHODS ====================
+
     def update_from_dict(self, data: dict) -> None:
         """Update paper from dictionary with automatic progress calculation"""
         super().update_from_dict(data)
 
         # Recalculate progress and word count if sections were updated
-        if "sections" in data or any(section.updated_at > self.updated_at for section in self.sections):
+        if "sections" in data or any(
+            section.updated_at > self.updated_at for section in self.sections
+        ):
             self.calculate_progress()
             self.calculate_word_count()
 

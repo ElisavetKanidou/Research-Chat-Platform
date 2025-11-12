@@ -1,9 +1,13 @@
 """
-Authentication schemas (app/schemas/auth.py)
+Authentication schemas (app/schemas/auth.py) - FIXED VERSION
 """
-from typing import Optional
+from typing import Optional, TYPE_CHECKING, Any
 from pydantic import BaseModel, Field, EmailStr, validator
 from datetime import datetime
+
+# Use TYPE_CHECKING to avoid circular import at runtime
+if TYPE_CHECKING:
+    from app.schemas.user import UserResponse
 
 
 class LoginRequest(BaseModel):
@@ -24,15 +28,19 @@ class RegisterRequest(BaseModel):
             raise ValueError('Password must be at least 8 characters long')
         return v
 
+    class Config:
+        populate_by_name = True
+
 
 class LoginResponse(BaseModel):
-    user: 'UserResponse'
+    user: Any  # Will be UserResponse, but use Any to avoid circular import
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
 
     class Config:
+        populate_by_name = True
         fields = {
             'access_token': 'accessToken',
             'refresh_token': 'refreshToken',
@@ -45,6 +53,7 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
     class Config:
+        populate_by_name = True
         fields = {
             'refresh_token': 'refreshToken'
         }
@@ -55,6 +64,7 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8)
 
     class Config:
+        populate_by_name = True
         fields = {
             'current_password': 'currentPassword',
             'new_password': 'newPassword'
@@ -64,12 +74,16 @@ class ChangePasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     email: EmailStr
 
+    class Config:
+        populate_by_name = True
+
 
 class ResetPasswordConfirmRequest(BaseModel):
     token: str
     new_password: str = Field(..., min_length=8)
 
     class Config:
+        populate_by_name = True
         fields = {
             'new_password': 'newPassword'
         }
@@ -82,6 +96,7 @@ class TokenResponse(BaseModel):
     expires_in: int
 
     class Config:
+        populate_by_name = True
         fields = {
             'access_token': 'accessToken',
             'refresh_token': 'refreshToken',
