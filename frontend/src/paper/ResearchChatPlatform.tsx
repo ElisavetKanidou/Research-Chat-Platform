@@ -1,10 +1,35 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, FileText, Download, Settings, Loader, CheckCircle, XCircle, BarChart } from 'lucide-react';
+import { Send, Download, Settings, Loader, CheckCircle, XCircle, Plus, ChevronDown } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import type { Paper } from '../types/paper';
 import type { ChatMessageRequest, ChatMessageResponse, ChatAttachment } from '../types/api';
 
-// Interfaces for TypeScript type safety
+// Section types matching backend
+type SectionType = 
+  | 'abstract' 
+  | 'introduction' 
+  | 'literature_review' 
+  | 'methodology' 
+  | 'results' 
+  | 'discussion' 
+  | 'conclusion';
+
+interface SectionOption {
+  value: SectionType;
+  label: string;
+  icon: string;
+}
+
+const SECTION_OPTIONS: SectionOption[] = [
+  { value: 'abstract', label: 'Abstract', icon: '📝' },
+  { value: 'introduction', label: 'Introduction', icon: '🚀' },
+  { value: 'literature_review', label: 'Literature Review', icon: '📚' },
+  { value: 'methodology', label: 'Methodology', icon: '🔬' },
+  { value: 'results', label: 'Results', icon: '📊' },
+  { value: 'discussion', label: 'Discussion', icon: '💬' },
+  { value: 'conclusion', label: 'Conclusion', icon: '🎯' },
+];
+
 interface Message {
   id: string;
   type: 'user' | 'assistant';
@@ -13,6 +38,7 @@ interface Message {
   needsConfirmation?: boolean;
   confirmed?: boolean;
   attachments?: ChatAttachment[];
+  canAddToSection?: boolean;
 }
 
 interface PersonalizationSettings {
@@ -25,14 +51,14 @@ interface ResearchChatPlatformProps {
   paperContext?: Paper;
 }
 
-// API Endpoint
-const API_URL = 'http://127.0.0.1:8000/api/chat/message';
+const API_URL = 'http://127.0.0.1:8000/api/v1';
 
 const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContext }) => {
   const { papers, user, addNotification } = useGlobalContext();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [openAddMenu, setOpenAddMenu] = useState<string | null>(null);
   const [personalization, setPersonalization] = useState<PersonalizationSettings>({
     labLevel: user?.preferences?.aiPersonalization?.labLevel || 7,
     personalLevel: user?.preferences?.aiPersonalization?.personalLevel || 8,
@@ -60,114 +86,223 @@ Current personalization settings:
 ${paperContext ? `Currently working on: "${paperContext.title}"` : 'No active paper selected.'}
 
 What research idea would you like to explore today?`,
-        timestamp: new Date()
+        timestamp: new Date(),
+        canAddToSection: false
       };
       setMessages([welcomeMessage]);
     }
   }, [personalization, paperContext]);
 
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return;
+  const getAuthToken = (): string | null => {
+    return localStorage.getItem('auth_token') || localStorage.getItem('token');
+  };
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: inputMessage,
-      timestamp: new Date()
+  const getAuthHeaders = (): HeadersInit => {
+    const token = getAuthToken();
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
     };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return headers;
+  };
 
-    setMessages(prev => [...prev, userMessage]);
-    const currentInput = inputMessage;
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isLoading) return;
+
+    const messageContent = inputMessage.trim();
     setInputMessage('');
     setIsLoading(true);
 
+    // Add user message immediately to UI
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      type: 'user',
+      content: messageContent,
+      timestamp: new Date(),
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
+
     try {
-      const requestData: ChatMessageRequest = {
-        content: currentInput,
-        paperContext: paperContext ? {
+      console.log('🚀 Sending message to AI...', messageContent);
+      
+      const requestBody = {
+        content: messageContent,
+        paper_context: paperContext ? {
           id: paperContext.id,
           title: paperContext.title,
           status: paperContext.status,
           progress: paperContext.progress,
-          researchArea: paperContext.researchArea,
-          abstract: paperContext.abstract,
-          coAuthors: paperContext.coAuthors,
-          currentWordCount: paperContext.currentWordCount,
-          targetWordCount: paperContext.targetWordCount,
-        } : undefined,
-        userPapersContext: papers.map(p => ({
-          id: p.id,
-          title: p.title,
-          researchArea: p.researchArea,
-          status: p.status,
-        })),
-        personalizationSettings: {
-          labLevel: personalization.labLevel,
-          personalLevel: personalization.personalLevel,
-          globalLevel: personalization.globalLevel,
-          writingStyle: user?.preferences?.aiPersonalization?.writingStyle || 'academic',
-          researchFocus: user?.preferences?.aiPersonalization?.researchFocus || [],
-        },
+          research_area: paperContext.researchArea || '',
+          abstract: paperContext.abstract || '',
+          co_authors: paperContext.coAuthors || [],
+          current_word_count: paperContext.currentWordCount || 0,
+          target_word_count: paperContext.targetWordCount || 0,
+        } : null,
+        personalization_settings: {
+          lab_level: personalization.labLevel,
+          personal_level: personalization.personalLevel,
+          global_level: personalization.globalLevel,
+        }
       };
 
-      // For development, use a mock user ID
-      const FAKE_USER_ID = "123e4567-e89b-12d3-a456-426614174000";
+      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
       
-      // Fix: Remove duplicate content property - use only requestData
-      const response = await fetch(API_URL, {
+      const response = await fetch(`${API_URL}/chat/message`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('📥 Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Error response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ AI Response data:', JSON.stringify(data, null, 2));
+
+      // Debug: Check what fields are in the response
+      console.log('🔍 Response fields:', Object.keys(data));
+      console.log('🔍 messageId:', data.messageId);
+      console.log('🔍 responseContent:', data.responseContent);
+      console.log('🔍 createdAt:', data.createdAt);
+
+      // Create AI message with fallbacks for field names
+      const aiMessage: Message = {
+        id: data.messageId || data.message_id || `ai-${Date.now()}`,
+        type: 'assistant',
+        content: data.responseContent || data.response_content || data.content || 'No response content received',
+        timestamp: new Date(),
+        needsConfirmation: data.needsConfirmation || data.needs_confirmation || false,
+        attachments: data.attachments || [],
+        canAddToSection: true
+      };
+
+      console.log('💬 Adding AI message to UI:', aiMessage);
+
+      // Add AI response to messages
+      setMessages(prev => {
+        console.log('📊 Current messages:', prev.length);
+        const updated = [...prev, aiMessage];
+        console.log('📊 Updated messages:', updated.length);
+        return updated;
+      });
+
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+      
+      // Show error message in chat
+      const errorMessage: Message = {
+        id: `error-${Date.now()}`,
+        type: 'assistant',
+        content: `Error: ${error instanceof Error ? error.message : 'Failed to get AI response. Please try again.'}`,
+        timestamp: new Date(),
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      
+      addNotification({
+        type: 'error',
+        title: 'Chat Error',
+        message: error instanceof Error ? error.message : 'Failed to send message',
+      });
+      
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddToSection = async (messageId: string, messageContent: string, sectionType: SectionType) => {
+    if (!paperContext) {
+      addNotification({
+        type: 'error',
+        title: 'No Paper Selected',
+        message: 'Please select a paper before adding content to sections',
+      });
+      return;
+    }
+
+    const token = getAuthToken();
+    if (!token) {
+      addNotification({
+        type: 'error',
+        title: 'Authentication Required',
+        message: 'Please log in to add content to sections',
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/chat/add-to-section`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
         body: JSON.stringify({
-          user_id: FAKE_USER_ID,
-          ...requestData,
+          message_id: messageId,
+          paper_id: paperContext.id,
+          section_type: sectionType,
+          content: messageContent,
+          append: true
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data: ChatMessageResponse = await response.json();
-
-      const assistantMessage: Message = {
-        id: data.messageId,
-        type: 'assistant',
-        content: data.responseContent,
-        timestamp: new Date(data.createdAt),
-        needsConfirmation: data.needsConfirmation,
-        attachments: data.attachments || []
-      };
-      
-      setMessages(prev => [...prev, assistantMessage]);
-
-      if (data.attachments && data.attachments.length > 0) {
+      if (response.status === 401) {
         addNotification({
-          type: 'info',
-          title: 'Files Generated',
-          message: `AI generated ${data.attachments.length} file(s) for download`,
+          type: 'error',
+          title: 'Authentication Failed',
+          message: 'Your session has expired. Please log in again.',
         });
+        return;
       }
 
-    } catch (error) {
-      console.error("Error fetching AI response:", error);
-      
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'assistant',
-        content: 'Sorry, I could not connect to the server. Please make sure the backend is running on http://127.0.0.1:8000',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      if (response.status === 403) {
+        addNotification({
+          type: 'error',
+          title: 'Access Denied',
+          message: 'You do not have permission to edit this paper.',
+        });
+        return;
+      }
+
+      if (response.status === 404) {
+        addNotification({
+          type: 'error',
+          title: 'Not Found',
+          message: 'Paper or section not found.',
+        });
+        return;
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
 
       addNotification({
-        type: 'error',
-        title: 'Connection Error',
-        message: 'Could not connect to AI service',
+        type: 'success',
+        title: 'Content Added',
+        message: `Successfully added to ${SECTION_OPTIONS.find(s => s.value === sectionType)?.label} (${data.wordCount} words)`,
+        autoRemove: true,
       });
-    } finally {
-      setIsLoading(false);
+
+      setOpenAddMenu(null);
+
+    } catch (error) {
+      console.error('Error adding to section:', error);
+      addNotification({
+        type: 'error',
+        title: 'Failed to Add Content',
+        message: error instanceof Error ? error.message : 'Could not add content to section. Please try again.',
+      });
     }
   };
 
@@ -187,7 +322,8 @@ What research idea would you like to explore today?`,
         ? "Perfect! Let's continue building on this foundation. What would you like to explore next?"
         : "No problem! Let me know what you'd like me to adjust or approach differently.",
       timestamp: new Date(),
-      needsConfirmation: false
+      needsConfirmation: false,
+      canAddToSection: false
     };
 
     setTimeout(() => {
@@ -196,13 +332,9 @@ What research idea would you like to explore today?`,
   };
 
   const downloadFile = (attachment: ChatAttachment) => {
-    console.log("Downloading:", attachment);
-    
     if (attachment.downloadUrl) {
-      // Use the actual download URL if available
       window.open(attachment.downloadUrl, '_blank');
     } else {
-      // Fallback: create mock file for development
       const blob = new Blob([`Mock ${attachment.type} file content for ${attachment.name}`], { 
         type: attachment.type === 'pdf' ? 'application/pdf' : 'text/plain' 
       });
@@ -313,23 +445,58 @@ What research idea would you like to explore today?`,
                 </div>
               )}
               
-              {message.needsConfirmation && message.confirmed === undefined && (
-                <div className="mt-3 flex gap-2">
-                  <button 
-                    onClick={() => handleConfirmation(message.id, true)} 
-                    className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm hover:bg-green-200"
-                  >
-                    <CheckCircle size={16} /> Yes, I agree
-                  </button>
-                  <button 
-                    onClick={() => handleConfirmation(message.id, false)} 
-                    className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm hover:bg-red-200"
-                  >
-                    <XCircle size={16} /> No, let's adjust
-                  </button>
+              {/* Action Buttons Row */}
+              {message.type === 'assistant' && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {/* Confirmation Buttons */}
+                  {message.needsConfirmation && message.confirmed === undefined && (
+                    <>
+                      <button 
+                        onClick={() => handleConfirmation(message.id, true)} 
+                        className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm hover:bg-green-200"
+                      >
+                        <CheckCircle size={16} /> Yes, I agree
+                      </button>
+                      <button 
+                        onClick={() => handleConfirmation(message.id, false)} 
+                        className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm hover:bg-red-200"
+                      >
+                        <XCircle size={16} /> No, let's adjust
+                      </button>
+                    </>
+                  )}
+                  
+                  {/* Add to Section Button */}
+                  {message.canAddToSection && paperContext && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setOpenAddMenu(openAddMenu === message.id ? null : message.id)}
+                        className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm hover:bg-blue-200"
+                      >
+                        <Plus size={16} /> Add to Section <ChevronDown size={14} />
+                      </button>
+                      
+                      {/* Dropdown Menu */}
+                      {openAddMenu === message.id && (
+                        <div className="absolute z-10 mt-1 w-56 bg-white border rounded-lg shadow-lg">
+                          {SECTION_OPTIONS.map((section) => (
+                            <button
+                              key={section.value}
+                              onClick={() => handleAddToSection(message.id, message.content, section.value)}
+                              className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
+                            >
+                              <span>{section.icon}</span>
+                              <span>{section.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               
+              {/* Confirmation Status */}
               {message.confirmed !== undefined && (
                 <div className="mt-2 flex items-center gap-1 text-sm">
                   {message.confirmed ? (

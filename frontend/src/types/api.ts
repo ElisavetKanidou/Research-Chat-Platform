@@ -118,6 +118,9 @@ export interface ChatMessageResponse {
     reasoningSteps?: string[];
     relatedPapers?: string[];
   };
+  // ✅ NEW: Section addition support
+  availableSections?: SectionType[];
+  canAddToSection?: boolean;
 }
 
 export interface ChatAttachment {
@@ -127,6 +130,59 @@ export interface ChatAttachment {
   url?: string;
   downloadUrl?: string;
 }
+
+// ==================== SECTION MANAGEMENT TYPES ====================
+
+export type SectionType = 
+  | 'abstract' 
+  | 'introduction' 
+  | 'literature_review' 
+  | 'methodology' 
+  | 'results' 
+  | 'discussion' 
+  | 'conclusion';
+
+export interface SectionOption {
+  value: SectionType;
+  label: string;
+  icon: string;
+  description?: string;
+}
+
+export interface AddToSectionRequest {
+  message_id: string;
+  paper_id: string;
+  section_type: SectionType;
+  content: string;
+  append?: boolean;
+}
+
+export interface AddToSectionResponse {
+  success: boolean;
+  message: string;
+  sectionId: string;
+  updatedContent: string;
+  wordCount: number;
+}
+
+export interface SectionContentResponse {
+  content: string;
+  sectionType: SectionType;
+  wordCount: number;
+  status: string;
+}
+
+export interface AllSectionsResponse {
+  sections: Record<SectionType, {
+    content: string;
+    wordCount: number;
+    status: string;
+  }>;
+  totalWordCount: number;
+  paperProgress: number;
+}
+
+// ==================== END SECTION MANAGEMENT TYPES ====================
 
 // Auth API types
 export interface LoginRequest {
@@ -414,9 +470,7 @@ export interface ApiError {
 
 export type ApiResponseType = 'json' | 'text' | 'blob' | 'arraybuffer';
 
-// ... (all your existing interfaces remain the same)
-
-// Status and error codes - Alternative approach with objects
+// Status and error codes
 export const HttpStatus = {
   OK: 200,
   CREATED: 201,

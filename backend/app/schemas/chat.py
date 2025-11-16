@@ -5,6 +5,10 @@ from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from enum import Enum
+from pydantic import BaseModel, Field
+from typing import Optional, List
+
+
 
 
 class MessageRole(str, Enum):
@@ -129,17 +133,17 @@ class ChatMessageRequest(BaseModel):
     personalization_settings: Optional[PersonalizationSettingsBase] = None
     attachments: Optional[List[ChatAttachmentCreate]] = []
 
-
 class ChatMessageResponse(BaseModel):
-    message_id: str
-    response_content: str
-    needs_confirmation: bool = False
-    attachments: List[ChatAttachmentResponse] = []
+    messageId: str = Field(..., alias="message_id")
+    responseContent: str = Field(..., alias="response_content")
+    needsConfirmation: bool = Field(default=False, alias="needs_confirmation")
+    attachments: List[Any] = []
     suggestions: List[str] = []
-    created_at: datetime
+    createdAt: str = Field(..., alias="created_at")
     metadata: Optional[Dict[str, Any]] = None
 
     class Config:
+        populate_by_name = True
         from_attributes = True
         fields = {
             'message_id': 'messageId',
@@ -148,6 +152,40 @@ class ChatMessageResponse(BaseModel):
             'created_at': 'createdAt'
         }
 
+# Update ChatMessageResponse to include section options
+class ChatMessageResponseEnhanced(BaseModel):
+    """Enhanced chat response with section addition options"""
+    message_id: str
+    response_content: str
+    needs_confirmation: bool = False
+    attachments: List[Any] = []
+    suggestions: List[str] = []
+    created_at: str
+    metadata: Optional[Dict[str, Any]] = None
+
+    # NEW: Available sections to add this content to
+    available_sections: List[str] = [
+        "abstract",
+        "introduction",
+        "literature_review",
+        "methodology",
+        "results",
+        "discussion",
+        "conclusion"
+    ]
+
+    # NEW: Indicates if this content is suitable for adding to sections
+    can_add_to_section: bool = True
+
+    class Config:
+        fields = {
+            'message_id': 'messageId',
+            'response_content': 'responseContent',
+            'needs_confirmation': 'needsConfirmation',
+            'created_at': 'createdAt',
+            'available_sections': 'availableSections',
+            'can_add_to_section': 'canAddToSection'
+        }
 
 class ChatHistoryResponse(BaseModel):
     id: str
@@ -363,3 +401,349 @@ class ChatMessageValidator:
         if v and len(v) > 10:
             raise ValueError('Cannot attach more than 10 files per message')
         return v
+class SectionType(str, Enum):
+    """Available paper sections"""
+    ABSTRACT = "abstract"
+    INTRODUCTION = "introduction"
+    LITERATURE_REVIEW = "literature_review"
+    METHODOLOGY = "methodology"
+    RESULTS = "results"
+    DISCUSSION = "discussion"
+    CONCLUSION = "conclusion"
+
+
+class AddToSectionRequest(BaseModel):
+    """Request to add chat content to a paper section"""
+    message_id: str = Field(..., description="ID of the chat message containing the content")
+    paper_id: str = Field(..., description="ID of the paper to add content to")
+    section_type: SectionType = Field(..., description="Type of section to add to")
+    content: str = Field(..., description="Content to add to the section")
+    append: bool = Field(default=True, description="If True, append to existing content. If False, replace.")
+
+
+class AddToSectionResponse(BaseModel):
+    """Response after adding content to section"""
+    success: bool
+    message: str
+    section_id: str
+    updated_content: str
+    word_count: int
+
+    class Config:
+        fields = {
+            'section_id': 'sectionId',
+            'updated_content': 'updatedContent',
+            'word_count': 'wordCount'
+        }
+
+
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from enum import Enum
+
+
+class SectionType(str, Enum):
+    """Enumeration of available paper section types"""
+    ABSTRACT = "abstract"
+    INTRODUCTION = "introduction"
+    LITERATURE_REVIEW = "literature_review"
+    METHODOLOGY = "methodology"
+    RESULTS = "results"
+    DISCUSSION = "discussion"
+    CONCLUSION = "conclusion"
+    REFERENCES = "references"
+
+
+class AddToSectionRequest(BaseModel):
+    """Request schema for adding content to a section"""
+    message_id: str = Field(
+        ...,
+        description="ID of the chat message containing the content",
+        min_length=1
+    )
+    paper_id: str = Field(
+        ...,
+        description="ID of the paper to add content to",
+        min_length=1
+    )
+    section_type: SectionType = Field(
+        ...,
+        description="Type of section to add content to"
+    )
+    content: str = Field(
+        ...,
+        description="Content to add to the section",
+        min_length=1,
+        max_length=50000
+    )
+    append: bool = Field(
+        default=True,
+        description="If true, append to existing content; if false, replace"
+    )
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "message_id": "msg-12345",
+                "paper_id": "10d46132-fb7b-456f-80ac-2e2aeb49b870",
+                "section_type": "abstract",
+                "content": "This research investigates...",
+                "append": True
+            }
+        }
+
+
+class AddToSectionResponse(BaseModel):
+    """Response schema after adding content to a section"""
+    sectionId: str = Field(..., description="ID of the section")
+    sectionType: str = Field(..., description="Type of the section")
+    title: str = Field(..., description="Title of the section")
+    content: str = Field(..., description="Updated content of the section")
+    wordCount: int = Field(..., description="Word count of the section")
+    status: str = Field(..., description="Status of the section")
+    updatedAt: Optional[str] = Field(None, description="Last update timestamp")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "sectionId": "section-uuid",
+                "sectionType": "abstract",
+                "title": "Abstract",
+                "content": "This research investigates...",
+                "wordCount": 150,
+                "status": "in-progress",
+                "updatedAt": "2025-11-16T14:30:00Z"
+            }
+        }
+
+
+class GetSectionContentResponse(BaseModel):
+    """Response schema for getting section content"""
+    content: str = Field(..., description="Content of the section")
+    sectionType: str = Field(..., description="Type of the section")
+    wordCount: int = Field(..., description="Word count")
+    status: str = Field(..., description="Section status")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "content": "This research investigates...",
+                "sectionType": "abstract",
+                "wordCount": 150,
+                "status": "in-progress"
+            }
+        }
+
+
+class SectionContent(BaseModel):
+    """Individual section content"""
+    sectionId: str
+    sectionType: str
+    title: str
+    content: str
+    wordCount: int
+    status: str
+    order: int
+
+
+class GetAllSectionsResponse(BaseModel):
+    """Response schema for getting all sections"""
+    sections: List[SectionContent] = Field(
+        ...,
+        description="List of all sections with their content"
+    )
+    totalWordCount: int = Field(
+        ...,
+        description="Total word count across all sections"
+    )
+    paperProgress: int = Field(
+        ...,
+        description="Overall paper progress (0-100)"
+    )
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "sections": [
+                    {
+                        "sectionId": "uuid-1",
+                        "sectionType": "abstract",
+                        "title": "Abstract",
+                        "content": "This research...",
+                        "wordCount": 150,
+                        "status": "completed",
+                        "order": 0
+                    },
+                    {
+                        "sectionId": "uuid-2",
+                        "sectionType": "introduction",
+                        "title": "Introduction",
+                        "content": "Background...",
+                        "wordCount": 500,
+                        "status": "in-progress",
+                        "order": 1
+                    }
+                ],
+                "totalWordCount": 650,
+                "paperProgress": 25
+            }
+        }
+
+
+"""
+Additional Chat Schemas - ADD TO END OF chat.py
+backend/app/schemas/chat.py
+
+These schemas should be APPENDED to the existing chat.py file
+"""
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from enum import Enum
+
+
+class SectionType(str, Enum):
+    """Enumeration of available paper section types"""
+    ABSTRACT = "abstract"
+    INTRODUCTION = "introduction"
+    LITERATURE_REVIEW = "literature_review"
+    METHODOLOGY = "methodology"
+    RESULTS = "results"
+    DISCUSSION = "discussion"
+    CONCLUSION = "conclusion"
+    REFERENCES = "references"
+
+
+class AddToSectionRequest(BaseModel):
+    """Request schema for adding content to a section"""
+    message_id: str = Field(
+        ...,
+        description="ID of the chat message containing the content",
+        min_length=1
+    )
+    paper_id: str = Field(
+        ...,
+        description="ID of the paper to add content to",
+        min_length=1
+    )
+    section_type: SectionType = Field(
+        ...,
+        description="Type of section to add content to"
+    )
+    content: str = Field(
+        ...,
+        description="Content to add to the section",
+        min_length=1,
+        max_length=50000
+    )
+    append: bool = Field(
+        default=True,
+        description="If true, append to existing content; if false, replace"
+    )
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "message_id": "msg-12345",
+                "paper_id": "10d46132-fb7b-456f-80ac-2e2aeb49b870",
+                "section_type": "abstract",
+                "content": "This research investigates...",
+                "append": True
+            }
+        }
+
+
+class AddToSectionResponse(BaseModel):
+    """Response schema after adding content to a section"""
+    sectionId: str = Field(..., description="ID of the section")
+    sectionType: str = Field(..., description="Type of the section")
+    title: str = Field(..., description="Title of the section")
+    content: str = Field(..., description="Updated content of the section")
+    wordCount: int = Field(..., description="Word count of the section")
+    status: str = Field(..., description="Status of the section")
+    updatedAt: Optional[str] = Field(None, description="Last update timestamp")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "sectionId": "section-uuid",
+                "sectionType": "abstract",
+                "title": "Abstract",
+                "content": "This research investigates...",
+                "wordCount": 150,
+                "status": "in-progress",
+                "updatedAt": "2025-11-16T14:30:00Z"
+            }
+        }
+
+
+class GetSectionContentResponse(BaseModel):
+    """Response schema for getting section content"""
+    content: str = Field(..., description="Content of the section")
+    sectionType: str = Field(..., description="Type of the section")
+    wordCount: int = Field(..., description="Word count")
+    status: str = Field(..., description="Section status")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "content": "This research investigates...",
+                "sectionType": "abstract",
+                "wordCount": 150,
+                "status": "in-progress"
+            }
+        }
+
+
+class SectionContent(BaseModel):
+    """Individual section content"""
+    sectionId: str
+    sectionType: str
+    title: str
+    content: str
+    wordCount: int
+    status: str
+    order: int
+
+
+class GetAllSectionsResponse(BaseModel):
+    """Response schema for getting all sections"""
+    sections: List[SectionContent] = Field(
+        ...,
+        description="List of all sections with their content"
+    )
+    totalWordCount: int = Field(
+        ...,
+        description="Total word count across all sections"
+    )
+    paperProgress: int = Field(
+        ...,
+        description="Overall paper progress (0-100)"
+    )
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "sections": [
+                    {
+                        "sectionId": "uuid-1",
+                        "sectionType": "abstract",
+                        "title": "Abstract",
+                        "content": "This research...",
+                        "wordCount": 150,
+                        "status": "completed",
+                        "order": 0
+                    },
+                    {
+                        "sectionId": "uuid-2",
+                        "sectionType": "introduction",
+                        "title": "Introduction",
+                        "content": "Background...",
+                        "wordCount": 500,
+                        "status": "in-progress",
+                        "order": 1
+                    }
+                ],
+                "totalWordCount": 650,
+                "paperProgress": 25
+            }
+        }

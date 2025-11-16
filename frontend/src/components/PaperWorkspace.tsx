@@ -5,7 +5,8 @@ import { ArrowLeft, FileText, MessageSquare, BarChart3, Settings } from 'lucide-
 import { useGlobalContext } from '../contexts/GlobalContext';
 
 import CurrentPaperComponent from '../paper/CurrentPaperComponent';
-import ResearchChatDemo from '../paper/ResearchChatDemo';
+//import ResearchChatDemo from '../paper/ResearchChatDemo';
+import ResearchChatPlatform from '../paper/ResearchChatPlatform';
 import ResearchProgressComponent from '../paper/ResearchProgressComponent';
 import PaperAISettingsComponent from '../paper/PaperAISettings';  // ✅ NEW IMPORT
 
@@ -142,7 +143,7 @@ const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
         
         {workspaceTab === 'chat' && (
           <div className="h-full overflow-hidden">
-            <ResearchChatDemo />
+            <ResearchChatPlatform />
           </div>
         )}
         

@@ -1,10 +1,16 @@
 """
-Configuration settings - Pydantic v2 with better parsing
+Configuration settings - FIXED with dotenv loading
+backend/app/core/config.py
 """
+# CRITICAL: Load .env file FIRST before anything else
+from dotenv import load_dotenv
+load_dotenv()  # This MUST be at the top!
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, Field
 from typing import List, Optional, Union
 import secrets
+import os
 
 
 class Settings(BaseSettings):
@@ -16,7 +22,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
 
     # Security
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     EMAIL_RESET_TOKEN_EXPIRE_HOURS: int = 1
@@ -42,7 +48,10 @@ class Settings(BaseSettings):
             return v
         return ["http://localhost:5173"]  # Default fallback
 
-    # OpenAI
+    # Groq AI (FREE!)
+    GROQ_API_KEY: Optional[str] = None
+
+    # OpenAI (Optional)
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4"
     OPENAI_MAX_TOKENS: int = 2000
@@ -92,6 +101,21 @@ class Settings(BaseSettings):
 # Create settings instance
 settings = Settings()
 
+# Print configuration on startup (only in DEBUG mode)
+if settings.DEBUG:
+    print("\n" + "="*60)
+    print("✅ CONFIGURATION LOADED")
+    print("="*60)
+    print(f"📦 Project: {settings.PROJECT_NAME} v{settings.VERSION}")
+    print(f"🔧 Debug Mode: {settings.DEBUG}")
+    print(f"💾 Database: {settings.DATABASE_URL[:40]}...")
+    print(f"🤖 Groq API: {'✅ Configured' if settings.GROQ_API_KEY else '❌ Not Set'}")
+    print(f"🔐 OpenAI API: {'✅ Configured' if settings.OPENAI_API_KEY else '⚠️  Optional'}")
+    print(f"🌐 CORS Origins: {len(settings.ALLOWED_ORIGINS)} configured")
+    print(f"💬 Max Chat History: {settings.MAX_CHAT_HISTORY}")
+    print(f"📊 AI Features: {'Enabled' if settings.ENABLE_AI_FEATURES else 'Disabled'}")
+    print("="*60 + "\n")
+
 
 # Helper functions
 def get_database_url() -> str:
@@ -109,6 +133,14 @@ def get_async_database_url() -> str:
 def get_redis_url() -> str:
     """Get Redis URL for connections"""
     return settings.REDIS_URL
+
+
+def get_groq_config() -> dict:
+    """Get Groq AI configuration"""
+    return {
+        "api_key": settings.GROQ_API_KEY,
+        "timeout": settings.AI_RESPONSE_TIMEOUT
+    }
 
 
 def get_openai_config() -> dict:

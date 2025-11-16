@@ -7,6 +7,9 @@ from app.api.v1.endpoints import auth, papers, chat, users, analytics
 
 api_router = APIRouter()
 
+from app.api.v1.endpoints import auth, papers, chat, users, analytics
+
+
 # Include all endpoint routers
 api_router.include_router(auth.router, prefix="/v1/auth", tags=["authentication"])
 api_router.include_router(papers.router, prefix="/v1/papers", tags=["papers"])
