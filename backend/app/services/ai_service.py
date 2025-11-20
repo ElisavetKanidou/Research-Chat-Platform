@@ -598,25 +598,34 @@ Please try:
 I'm here to help with your research once the connection is restored!"""
 
     # ==================== Additional Service Methods ====================
-
     async def get_chat_history(
-        self,
-        db: AsyncSession,
-        user_id: str,
-        paper_id: Optional[str] = None,
-        limit: int = 50
+            self,
+            db: AsyncSession,
+            user_id: str,
+            paper_id: Optional[str] = None,
+            limit: int = 50
     ) -> List[ChatMessage]:
         """Get chat history for user"""
 
-        query = select(ChatMessage).where(ChatMessage.user_id == user_id)
+        from sqlalchemy import select
+        from uuid import UUID
 
+        # Build query
+        query = select(ChatMessage).where(
+            ChatMessage.user_id == UUID(user_id)
+        )
+
+        # ✅ CRITICAL: Filter by paper_id if provided
         if paper_id:
-            query = query.where(ChatMessage.paper_id == paper_id)
+            query = query.where(ChatMessage.paper_id == UUID(paper_id))
 
-        query = query.order_by(desc(ChatMessage.created_at)).limit(limit)
+        # Order and limit
+        query = query.order_by(ChatMessage.created_at.asc()).limit(limit)
 
         result = await db.execute(query)
-        return result.scalars().all()
+        messages = result.scalars().all()
+
+        return list(messages)
 
     async def get_message_by_id(
         self,

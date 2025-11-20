@@ -273,9 +273,35 @@ export const retryWithBackoff = async <T>(
       const delay = baseDelay * Math.pow(2, attempt);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
-  }
-  
+  } 
   throw lastError;
+  
+};
+
+// ==================== CHAT API HELPERS ====================
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+  paper_id?: string;
+}
+
+export const getChatHistory = async (paperId?: string, limit: number = 50): Promise<ChatMessage[]> => {
+  try {
+    const params: Record<string, any> = { limit };
+    if (paperId) {
+      params.paper_id = paperId;
+    }
+    
+    const response = await apiClient.get<ChatMessage[]>('/chat/history', params);
+    console.log('📜 Chat history loaded:', response.length, 'messages');
+    return response;
+  } catch (error) {
+    console.error('❌ Failed to load chat history:', error);
+    return []; // Return empty array on error
+  }
 };
 
 

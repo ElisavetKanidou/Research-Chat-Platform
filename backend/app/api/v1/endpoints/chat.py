@@ -16,7 +16,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
-
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from uuid import UUID
 from app.api.v1.endpoints.auth import get_current_user
 from app.database.session import get_db
 from app.models.user import User
@@ -141,7 +143,6 @@ async def send_chat_message(
             detail="An unexpected error occurred while processing your message"
         )
 
-
 @router.get("/history", response_model=List[ChatHistoryResponse])
 async def get_chat_history(
     current_user: User = Depends(get_current_user),
@@ -149,16 +150,7 @@ async def get_chat_history(
     paper_id: Optional[str] = None,
     limit: int = 50
 ):
-    """
-    Get chat history for the current user.
-
-    Args:
-        paper_id: Optional - filter by specific paper
-        limit: Maximum number of messages (default: 50, max: 100)
-
-    Returns:
-        List of chat messages in chronological order
-    """
+    """Get chat history for the current user."""
 
     # Validate limit
     if limit > 100:
@@ -176,7 +168,19 @@ async def get_chat_history(
             limit=limit
         )
 
-        return [ChatHistoryResponse.from_orm(msg) for msg in messages]
+        # ✅ FIX: Manually convert to response format (avoid Pydantic validation issues)
+        return [
+            {
+                "id": str(msg.id),  # ✅ Convert UUID to string
+                "role": msg.role,
+                "content": msg.content,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                "paper_id": str(msg.paper_id) if msg.paper_id else None,
+                "attachments": [],  # ✅ Skip attachments to avoid lazy load
+                "metadata": {}  # ✅ Return empty dict
+            }
+            for msg in messages
+        ]
 
     except Exception as e:
         logger.error(f"Error fetching chat history: {str(e)}", exc_info=True)
@@ -184,7 +188,6 @@ async def get_chat_history(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve chat history"
         )
-
 
 @router.delete("/history/{message_id}")
 async def delete_chat_message(
@@ -365,9 +368,9 @@ async def get_ai_suggestions(
 
 @router.post("/add-to-section", response_model=AddToSectionResponse)
 async def add_content_to_section(
-    request: AddToSectionRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+        request: AddToSectionRequest,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
 ):
     """
     Add AI-generated content from chat to a specific paper section.
@@ -393,9 +396,28 @@ async def add_content_to_section(
     )
 
     try:
+        # ✅ FIX: Eager load paper WITH sections to avoid lazy load error
+        from uuid import UUID
+
+        result = await db.execute(
+            select(Paper)
+            .options(selectinload(Paper.sections))  # ✅ Eager load sections!
+            .where(Paper.id == UUID(request.paper_id))
+        )
+        paper = result.scalar_one_or_none()
+
+        if not paper:
+            raise NotFoundException(f"Paper {request.paper_id} not found")
+
+        # Check permissions
+        if not paper.is_viewable_by(str(current_user.id)):
+            raise AuthorizationException("You don't have permission to edit this paper")
+
+        # Now call service with loaded paper
         result = await section_content_service.add_chat_content_to_section(
             db=db,
             user_id=str(current_user.id),
+            #paper=paper,  # Pass loaded paper object
             paper_id=request.paper_id,
             section_type=request.section_type.value,
             content=request.content,
@@ -434,7 +456,6 @@ async def add_content_to_section(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to add content to section"
         )
-
 
 @router.get("/section-content/{paper_id}/{section_type}", response_model=GetSectionContentResponse)
 async def get_section_content(

@@ -1,7 +1,8 @@
-// components/layout/Sidebar.tsx
+// components/layout/Sidebar.tsx - WITH NOTIFICATION BELL
 import React from 'react';
 import { Home, FileText, MessageSquare, BarChart3, Settings, Plus, LogOut, User } from 'lucide-react';
 import { useGlobalContext } from '../../contexts/GlobalContext';
+import NotificationBell from './NotificationBell';
 
 interface SidebarProps {
   activeSection: string;
@@ -16,7 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNewPaper,
   onLogout
 }) => {
-  const { papers, activePaper } = useGlobalContext();
+  const { papers, activePaper, user } = useGlobalContext();
 
   const navigationItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
@@ -28,9 +29,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div className="w-80 bg-white shadow-lg flex flex-col h-full">
-      {/* Header */}
+      {/* Header with Notification Bell */}
       <div className="p-6 border-b">
-        <h1 className="text-xl font-bold text-gray-900">ResearchHub</h1>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex-1">
+            <h1 className="text-xl font-bold text-gray-900">ResearchHub</h1>
+          </div>
+          {/* ✅ NOTIFICATION BELL HERE */}
+          <NotificationBell />
+        </div>
         <p className="text-sm text-gray-600">Comprehensive Research Management</p>
       </div>
 
@@ -105,7 +112,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <User size={16} className="text-blue-600" />
             </div>
             <div>
-              <div className="text-sm font-medium text-gray-900">Researcher</div>
+              <div className="text-sm font-medium text-gray-900">
+                {user?.name || 'Researcher'}
+              </div>
               <div className="text-xs text-gray-500">{papers.length} papers</div>
             </div>
           </div>

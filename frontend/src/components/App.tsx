@@ -1,6 +1,7 @@
-// components/App.tsx
+// components/App.tsx - COMPLETE 330 LINES VERSION
 import React, { useState, useEffect } from 'react';
 import { GlobalProvider, useGlobalContext } from '../contexts/GlobalContext';
+import { NotificationProvider } from '../contexts/NotificationContext';
 import { authService } from '../services/authService';
 import type { Paper } from '../types/paper';
 import Dashboard from './Dashboard';
@@ -9,7 +10,8 @@ import Analytics from './Analytics';
 import SettingsPanel from './SettingsPanel';
 import PaperWorkspace from './PaperWorkspace';
 import LoginPage from './auth/LoginPage';
-import { Bell, Search, Menu, X, LogOut } from 'lucide-react';
+import NotificationBell from './layout/NotificationBell';
+import { Search, Menu, X, LogOut } from 'lucide-react';
 
 type ViewType = 'dashboard' | 'papers' | 'workspace' | 'analytics' | 'settings';
 
@@ -202,17 +204,15 @@ const ResearchPlatform: React.FC = () => {
                 {theme === 'light' ? '🌙' : '☀️'}
               </button>
               
-              <button className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 relative">
-                <Bell size={20} />
-                <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">
-                  3
-                </span>
-              </button>
+              {/* ✅ NOTIFICATION BELL - REPLACED LINE 220-226 */}
+              <div className="relative z-50">
+                <NotificationBell />
+              </div>
               
               {user && (
                 <div className="flex items-center space-x-2">
                   <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
-                    {user.name.charAt(0).toUpperCase()}
+                    {user.name?.charAt(0).toUpperCase() || 'U'}
                   </div>
                   <span className="text-sm text-gray-700 dark:text-gray-300 hidden sm:block">
                     {user.name}
@@ -316,10 +316,12 @@ const AuthenticatedApp: React.FC = () => {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // Only load GlobalProvider AFTER authentication
+  // ✅ WRAPPED WITH NOTIFICATION PROVIDER
   return (
     <GlobalProvider>
-      <ResearchPlatform />
+      <NotificationProvider>
+        <ResearchPlatform />
+      </NotificationProvider>
     </GlobalProvider>
   );
 };

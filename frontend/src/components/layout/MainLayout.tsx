@@ -1,6 +1,7 @@
-// components/layout/MainLayout.tsx
+// components/layout/MainLayout.tsx - COMPLETE WITH HEADER
 import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
+import { Header } from './Header';
 import Dashboard from '../Dashboard';
 import Analytics from '../Analytics';
 import SettingsPanel from '../SettingsPanel';
@@ -10,13 +11,12 @@ import { useGlobalContext } from '../../contexts/GlobalContext';
 import type { Paper } from '../../types/paper';
 
 const MainLayout: React.FC = () => {
-  const { activePaper, setActivePaper } = useGlobalContext();
+  const { activePaper, setActivePaper, user } = useGlobalContext();
   const [activeSection, setActiveSection] = useState<string>('dashboard');
 
   const handleSectionChange = (section: string) => {
     setActiveSection(section);
-    // Clear active paper when switching sections (except workspace)
-    if (section !== 'workspace' && activePaper) {
+    if (section !== 'workspace' && section !== 'chat' && activePaper) {
       setActivePaper(null);
     }
   };
@@ -27,14 +27,49 @@ const MainLayout: React.FC = () => {
   };
 
   const handleNewPaper = () => {
-    // Logic to create new paper would go here
     console.log('Creating new paper...');
     setActiveSection('papers');
   };
 
   const handleLogout = () => {
-    console.log('Logging out...');
-    // Logout logic would go here
+    localStorage.removeItem('auth_token');
+    window.location.href = '/login';
+  };
+
+  const getHeaderTitle = () => {
+    switch (activeSection) {
+      case 'dashboard':
+        return 'Dashboard';
+      case 'papers':
+        return 'Papers Management';
+      case 'chat':
+        return 'AI Research Assistant';
+      case 'analytics':
+        return 'Analytics';
+      case 'settings':
+        return 'Settings';
+      case 'workspace':
+        return activePaper?.title || 'Paper Workspace';
+      default:
+        return 'Research Platform';
+    }
+  };
+
+  const getHeaderSubtitle = () => {
+    switch (activeSection) {
+      case 'dashboard':
+        return "Here's an overview of your research progress and activities";
+      case 'papers':
+        return 'Manage and organize your research papers';
+      case 'chat':
+        return activePaper ? `Working on: ${activePaper.title}` : 'Select a paper to start';
+      case 'analytics':
+        return 'Track your research progress and productivity';
+      case 'workspace':
+        return activePaper ? `Draft • ${activePaper.progress || 0}% complete` : '';
+      default:
+        return '';
+    }
   };
 
   const renderContent = () => {
@@ -51,15 +86,30 @@ const MainLayout: React.FC = () => {
         return (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-7xl mx-auto">
-              <h1 className="text-2xl font-bold text-gray-900 mb-6">Papers Management</h1>
               <p className="text-gray-600">Manage your research papers here.</p>
-              {/* Add your Papers component here */}
             </div>
           </div>
         );
       
       case 'chat':
-        return <ResearchChatPlatform />;
+        return activePaper ? (
+          <ResearchChatPlatform paperContext={activePaper} />
+        ) : (
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="text-center">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No paper selected</h3>
+              <p className="text-gray-600 mb-4">
+                Please select a paper to start chatting with AI Assistant.
+              </p>
+              <button
+                onClick={() => setActiveSection('papers')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Go to Papers
+              </button>
+            </div>
+          </div>
+        );
       
       case 'analytics':
         return <Analytics />;
@@ -99,9 +149,19 @@ const MainLayout: React.FC = () => {
         onLogout={handleLogout}
       />
       
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {renderContent()}
+      {/* Main Content with Header */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header with Notifications */}
+        <Header 
+          title={getHeaderTitle()}
+          subtitle={getHeaderSubtitle()}
+          showSearch={activeSection !== 'workspace' && activeSection !== 'chat'}
+        />
+        
+        {/* Content Area */}
+        <div className="flex-1 overflow-hidden">
+          {renderContent()}
+        </div>
       </div>
     </div>
   );

@@ -39,6 +39,7 @@ interface Message {
   confirmed?: boolean;
   attachments?: ChatAttachment[];
   canAddToSection?: boolean;
+  userApproved?: boolean | null;
 }
 
 interface PersonalizationSettings {
@@ -53,8 +54,38 @@ interface ResearchChatPlatformProps {
 
 const API_URL = 'http://127.0.0.1:8000/api/v1';
 
-const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContext }) => {
+const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContext: paperContextProp }) => {
   const { papers, user, addNotification } = useGlobalContext();
+  
+  const [currentPaper, setCurrentPaper] = useState<Paper | undefined>(paperContextProp);
+  
+  useEffect(() => {
+    if (paperContextProp) {
+      setCurrentPaper(paperContextProp);
+      console.log('📄 Using paper from prop:', paperContextProp.title);
+      return;
+    }
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const paperIdFromUrl = urlParams.get('paperId');
+    
+    if (paperIdFromUrl && papers) {
+      const paperFromUrl = papers.find(p => p.id === paperIdFromUrl);
+      if (paperFromUrl) {
+        setCurrentPaper(paperFromUrl);
+        console.log('📄 Using paper from URL:', paperFromUrl.title);
+        return;
+      }
+    }
+    
+    if (papers && papers.length > 0) {
+      setCurrentPaper(papers[0]);
+      console.log('📄 Using first available paper:', papers[0].title);
+    }
+  }, [paperContextProp, papers]);
+  
+  const paperContext = currentPaper;
+  
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -71,27 +102,86 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContex
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Load chat history on mount and when paper changes
   useEffect(() => {
-    if (messages.length === 0) {
-      const welcomeMessage: Message = {
-        id: 'welcome',
-        type: 'assistant',
-        content: `Welcome to ResearchChat-AI! I'm your personalized research assistant. I can help you develop research ideas, find related papers, identify gaps, and guide you through the entire paper writing process.
+    const loadChatHistory = async () => {
+      // ✅ FIX: Always reload when paper changes
+      // DON'T check messages.length here!
 
-Current personalization settings:
-- Lab papers influence: ${personalization.labLevel}/10
-- Your personal papers influence: ${personalization.personalLevel}/10  
-- Global literature influence: ${personalization.globalLevel}/10
+      try {
+        const token = getAuthToken();
+        if (!token) {
+          setMessages([createWelcomeMessage()]);
+          return;
+        }
 
-${paperContext ? `Currently working on: "${paperContext.title}"` : 'No active paper selected.'}
+        console.log('📜 Loading chat history for paper:', paperContext?.id || 'all papers');
+        
+        // ✅ Clear messages first (loading state)
+        setMessages([]);
+        
+        const response = await fetch(
+          `${API_URL}/chat/history${paperContext ? `?paper_id=${paperContext.id}` : ''}`,
+          {
+            method: 'GET',
+            headers: getAuthHeaders(),
+          }
+        );
 
-What research idea would you like to explore today?`,
-        timestamp: new Date(),
-        canAddToSection: false
-      };
-      setMessages([welcomeMessage]);
-    }
-  }, [personalization, paperContext]);
+        if (!response.ok) {
+          throw new Error(`Failed to load history: ${response.status}`);
+        }
+
+        const historyData = await response.json();
+        console.log('✅ Chat history loaded:', historyData.length, 'messages for paper:', paperContext?.title);
+
+        if (historyData.length === 0) {
+          console.log('📭 No history found, showing welcome message');
+          setMessages([createWelcomeMessage()]);
+          return;
+        }
+
+        // Convert backend format to UI format
+        const loadedMessages: Message[] = historyData.map((msg: any) => ({
+          id: msg.id || `msg-${Date.now()}-${Math.random()}`,
+          type: msg.role === 'user' ? 'user' : 'assistant',
+          content: msg.content,
+          timestamp: new Date(msg.created_at),
+          needsConfirmation: false,
+          userApproved: null,
+          canAddToSection: msg.role === 'assistant',
+        }));
+
+        setMessages(loadedMessages);
+
+      } catch (error) {
+        console.error('❌ Error loading chat history:', error);
+        setMessages([createWelcomeMessage()]);
+      }
+    };
+
+    loadChatHistory();
+  }, [paperContext?.id]); // ✅ Re-run when paper ID changes
+
+  // Helper function to create welcome message
+  const createWelcomeMessage = (): Message => ({
+    id: 'welcome',
+    type: 'assistant',
+    content: `Welcome to ResearchChat-AI! I'm your personalized research assistant. I can help you develop research ideas, find related papers, identify gaps, and guide you through the entire paper writing process.
+
+  Current personalization settings:
+  - Lab papers influence: ${personalization.labLevel}/10
+  - Your personal papers influence: ${personalization.personalLevel}/10  
+  - Global literature influence: ${personalization.globalLevel}/10
+
+  ${paperContext ? `Currently working on: "${paperContext.title}"` : 'No active paper selected.'}
+
+  What research idea would you like to explore today?`,
+    timestamp: new Date(),
+    needsConfirmation: false,
+    userApproved: null,
+    canAddToSection: false
+  });
 
   const getAuthToken = (): string | null => {
     return localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -117,7 +207,6 @@ What research idea would you like to explore today?`,
     setInputMessage('');
     setIsLoading(true);
 
-    // Add user message immediately to UI
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       type: 'user',
@@ -141,7 +230,7 @@ What research idea would you like to explore today?`,
           abstract: paperContext.abstract || '',
           co_authors: paperContext.coAuthors || [],
           current_word_count: paperContext.currentWordCount || 0,
-          target_word_count: paperContext.targetWordCount || 0,
+          target_word_count: paperContext.targetWordCount || 8000,  // Default 8000 words for academic papers
         } : null,
         personalization_settings: {
           lab_level: personalization.labLevel,
@@ -169,26 +258,19 @@ What research idea would you like to explore today?`,
       const data = await response.json();
       console.log('✅ AI Response data:', JSON.stringify(data, null, 2));
 
-      // Debug: Check what fields are in the response
-      console.log('🔍 Response fields:', Object.keys(data));
-      console.log('🔍 messageId:', data.messageId);
-      console.log('🔍 responseContent:', data.responseContent);
-      console.log('🔍 createdAt:', data.createdAt);
-
-      // Create AI message with fallbacks for field names
       const aiMessage: Message = {
         id: data.messageId || data.message_id || `ai-${Date.now()}`,
         type: 'assistant',
         content: data.responseContent || data.response_content || data.content || 'No response content received',
         timestamp: new Date(),
-        needsConfirmation: data.needsConfirmation || data.needs_confirmation || false,
+        needsConfirmation: true,
+        userApproved: null,
         attachments: data.attachments || [],
         canAddToSection: true
       };
 
       console.log('💬 Adding AI message to UI:', aiMessage);
 
-      // Add AI response to messages
       setMessages(prev => {
         console.log('📊 Current messages:', prev.length);
         const updated = [...prev, aiMessage];
@@ -199,7 +281,6 @@ What research idea would you like to explore today?`,
     } catch (error) {
       console.error('❌ Error sending message:', error);
       
-      // Show error message in chat
       const errorMessage: Message = {
         id: `error-${Date.now()}`,
         type: 'assistant',
@@ -306,23 +387,24 @@ What research idea would you like to explore today?`,
     }
   };
 
-  const handleConfirmation = (messageId: string, confirmed: boolean) => {
+  const handleConfirmation = (messageId: string, approved: boolean) => {
     setMessages(prev =>
       prev.map(msg =>
         msg.id === messageId
-          ? { ...msg, confirmed, needsConfirmation: false }
+          ? { ...msg, userApproved: approved }
           : msg
       )
     );
 
     const followUpMessage: Message = {
-      id: Date.now().toString(),
+      id: `followup-${Date.now()}`,
       type: 'assistant',
-      content: confirmed
-        ? "Perfect! Let's continue building on this foundation. What would you like to explore next?"
-        : "No problem! Let me know what you'd like me to adjust or approach differently.",
+      content: approved
+        ? "Great! I'm glad this helped. You can add this to your paper using the 'Add to Section' button, or ask me anything else!"
+        : "No problem! Let me know how I can adjust or improve this response.",
       timestamp: new Date(),
       needsConfirmation: false,
+      userApproved: null,
       canAddToSection: false
     };
 
@@ -449,41 +531,73 @@ What research idea would you like to explore today?`,
               {message.type === 'assistant' && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {/* Confirmation Buttons */}
-                  {message.needsConfirmation && message.confirmed === undefined && (
+                  {message.userApproved === null && (
                     <>
                       <button 
                         onClick={() => handleConfirmation(message.id, true)} 
-                        className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm hover:bg-green-200"
+                        className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm hover:bg-green-200 transition-colors"
                       >
-                        <CheckCircle size={16} /> Yes, I agree
+                        <CheckCircle size={16} /> Yes, helpful
                       </button>
                       <button 
                         onClick={() => handleConfirmation(message.id, false)} 
-                        className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm hover:bg-red-200"
+                        className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm hover:bg-red-200 transition-colors"
                       >
-                        <XCircle size={16} /> No, let's adjust
+                        <XCircle size={16} /> No, adjust
                       </button>
                     </>
                   )}
                   
+                  {/* Show status after user answered */}
+                  {message.userApproved !== null && (
+                    <div className="flex items-center gap-1 text-sm px-3 py-1 rounded-full bg-gray-50">
+                      {message.userApproved ? (
+                        <>
+                          <CheckCircle size={16} className="text-green-600" />
+                          <span className="text-green-600 font-medium">Marked as helpful</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle size={16} className="text-orange-600" />
+                          <span className="text-orange-600 font-medium">Needs adjustment</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  
                   {/* Add to Section Button */}
-                  {message.canAddToSection && paperContext && (
+                  {message.canAddToSection && (
                     <div className="relative">
                       <button
-                        onClick={() => setOpenAddMenu(openAddMenu === message.id ? null : message.id)}
-                        className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm hover:bg-blue-200"
+                        onClick={() => {
+                          if (!paperContext) {
+                            addNotification({
+                              type: 'warning',
+                              title: 'No Paper Selected',
+                              message: 'Please select or create a paper first to add content to sections.',
+                            });
+                            return;
+                          }
+                          setOpenAddMenu(openAddMenu === message.id ? null : message.id);
+                        }}
+                        className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm transition-colors ${
+                          paperContext 
+                            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        }`}
+                        title={!paperContext ? 'Select a paper first' : 'Add this content to a paper section'}
                       >
                         <Plus size={16} /> Add to Section <ChevronDown size={14} />
                       </button>
                       
                       {/* Dropdown Menu */}
-                      {openAddMenu === message.id && (
+                      {openAddMenu === message.id && paperContext && (
                         <div className="absolute z-10 mt-1 w-56 bg-white border rounded-lg shadow-lg">
                           {SECTION_OPTIONS.map((section) => (
                             <button
                               key={section.value}
                               onClick={() => handleAddToSection(message.id, message.content, section.value)}
-                              className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
+                              className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 border-b last:border-b-0"
                             >
                               <span>{section.icon}</span>
                               <span>{section.label}</span>
@@ -492,17 +606,6 @@ What research idea would you like to explore today?`,
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              )}
-              
-              {/* Confirmation Status */}
-              {message.confirmed !== undefined && (
-                <div className="mt-2 flex items-center gap-1 text-sm">
-                  {message.confirmed ? (
-                    <><CheckCircle size={16} className="text-green-600" /> <span className="text-green-600">Confirmed</span></>
-                  ) : (
-                    <><XCircle size={16} className="text-red-600" /> <span className="text-red-600">Needs adjustment</span></>
                   )}
                 </div>
               )}

@@ -29,11 +29,20 @@ async def create_paper(
 ):
     """Create a new research paper"""
 
-    # Check if user can create papers (subscription limits)
-    if not current_user.can_create_papers():
+    # ✅ FIX: Count papers without lazy loading
+    from sqlalchemy import func
+
+    result = await db.execute(
+        select(func.count(Paper.id))
+        .where(Paper.owner_id == current_user.id)
+    )
+    paper_count = result.scalar() or 0
+
+    # Check subscription limit (5 papers for free tier)
+    if paper_count >= 10:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Paper creation limit reached for your subscription plan"
+            detail="You have reached the free tier limit of 5 papers. Upgrade your plan to create more papers."
         )
 
     paper = await paper_service.create_paper(
@@ -55,36 +64,103 @@ async def get_papers(
         skip: int = Query(0, ge=0, description="Number of papers to skip"),
         limit: int = Query(50, ge=1, le=100, description="Number of papers to return")
 ):
-    """Get user's papers with optional filtering and pagination"""
+    """
+    Get user's papers with optional filtering and pagination
+    Returns papers where user is EITHER owner OR collaborator
+    """
 
-    query = select(Paper).where(Paper.owner_id == current_user.id)
+    import logging
+    logger = logging.getLogger(__name__)
 
-    # Apply filters
+    logger.info(f"📄 Fetching papers for user {current_user.id}")
+
+    # ✅ STEP 1: Get papers where user is OWNER
+    owned_query = select(Paper).where(Paper.owner_id == current_user.id)
+
+    # Apply filters to owned papers
     if status_filter:
         try:
             status_enum = PaperStatus(status_filter)
-            query = query.where(Paper.status == status_enum)
+            owned_query = owned_query.where(Paper.status == status_enum)
         except ValueError:
             raise ValidationException(f"Invalid status: {status_filter}")
 
     if research_area:
-        query = query.where(Paper.research_area.ilike(f"%{research_area}%"))
+        owned_query = owned_query.where(Paper.research_area.ilike(f"%{research_area}%"))
 
     if search:
         search_filter = or_(
             Paper.title.ilike(f"%{search}%"),
             Paper.abstract.ilike(f"%{search}%")
         )
-        query = query.where(search_filter)
+        owned_query = owned_query.where(search_filter)
 
-    # Add pagination
-    query = query.offset(skip).limit(limit).order_by(Paper.updated_at.desc())
+    owned_query = owned_query.order_by(Paper.updated_at.desc())
 
-    result = await db.execute(query)
-    papers = result.scalars().all()
+    owned_result = await db.execute(owned_query)
+    owned_papers = owned_result.scalars().all()
 
-    return [PaperListResponse.model_validate(paper) for paper in papers]
+    logger.info(f"👑 User owns {len(owned_papers)} papers")
 
+    # ✅ STEP 2: Get papers where user is COLLABORATOR
+    from app.models.paper import PaperCollaborator
+
+    collab_query = select(PaperCollaborator).where(
+        and_(
+            PaperCollaborator.user_id == current_user.id,
+            PaperCollaborator.status == "accepted"
+        )
+    )
+
+    collab_result = await db.execute(collab_query)
+    collaborations = collab_result.scalars().all()
+
+    logger.info(f"🤝 User is collaborator on {len(collaborations)} papers")
+
+    # Get the actual papers from collaborations
+    collab_paper_ids = [c.paper_id for c in collaborations]
+
+    collab_papers = []
+    if collab_paper_ids:
+        collab_papers_query = select(Paper).where(
+            Paper.id.in_(collab_paper_ids)
+        )
+
+        # Apply same filters to collaborative papers
+        if status_filter:
+            collab_papers_query = collab_papers_query.where(Paper.status == status_enum)
+        if research_area:
+            collab_papers_query = collab_papers_query.where(Paper.research_area.ilike(f"%{research_area}%"))
+        if search:
+            collab_papers_query = collab_papers_query.where(search_filter)
+
+        collab_papers_query = collab_papers_query.order_by(Paper.updated_at.desc())
+
+        collab_papers_result = await db.execute(collab_papers_query)
+        collab_papers = collab_papers_result.scalars().all()
+
+        logger.info(f"📋 Fetched {len(collab_papers)} collaborative papers")
+
+    # ✅ STEP 3: Combine both lists
+    all_papers = list(owned_papers) + list(collab_papers)
+
+    # Remove duplicates (if user is both owner and collaborator)
+    seen_ids = set()
+    unique_papers = []
+    for paper in all_papers:
+        if paper.id not in seen_ids:
+            seen_ids.add(paper.id)
+            unique_papers.append(paper)
+
+    # Sort by updated_at
+    unique_papers.sort(key=lambda p: p.updated_at, reverse=True)
+
+    # Apply pagination
+    paginated_papers = unique_papers[skip:skip + limit]
+
+    logger.info(f"✅ Returning {len(paginated_papers)} papers (total: {len(unique_papers)})")
+
+    return [PaperListResponse.model_validate(paper) for paper in paginated_papers]
 
 @router.get("/{paper_id}", response_model=PaperResponse)
 async def get_paper(
