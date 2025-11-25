@@ -1,6 +1,6 @@
-// components/CurrentPaperComponent.tsx - COMPLETE FIXED VERSION
+// components/paper/CurrentPaperComponent.tsx - FINAL VERSION (NO DUPLICATE ABSTRACT)
 import React, { useState } from 'react';
-import { FileText, Save, Download, Edit3, Calendar, Users, Target, UserPlus } from 'lucide-react';
+import { FileText, Save, Download, Edit3, Calendar, Users, Target, UserPlus, X, Check, Loader } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import type { PaperSection } from '../types/paper';
 import { paperService } from '../services/paperService';
@@ -11,6 +11,13 @@ interface Friend {
   name: string;
   email: string;
   is_past_collaborator: boolean;
+}
+
+interface EditingSectionState {
+  sectionId: string;
+  content: string;
+  originalContent: string;
+  isSaving: boolean;
 }
 
 const CurrentPaperComponent: React.FC = () => {
@@ -24,6 +31,9 @@ const CurrentPaperComponent: React.FC = () => {
   const [showInvitePrompt, setShowInvitePrompt] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [notFoundEmail, setNotFoundEmail] = useState('');
+  
+  // ✅ Editing state for sections
+  const [editingSection, setEditingSection] = useState<EditingSectionState | null>(null);
 
   if (!activePaper) {
     return (
@@ -132,12 +142,58 @@ const CurrentPaperComponent: React.FC = () => {
     }
   };
 
-  const updateAbstract = async (newAbstract: string) => {
+  // ✅ Start editing a section
+  const startEditingSection = (section: PaperSection) => {
+    setEditingSection({
+      sectionId: section.id,
+      content: section.content || '',
+      originalContent: section.content || '',
+      isSaving: false
+    });
+  };
+
+  // ✅ Cancel editing
+  const cancelEditingSection = () => {
+    setEditingSection(null);
+  };
+
+  // ✅ Save section content
+  const saveSectionContent = async () => {
+    if (!editingSection) return;
+
+    // Don't save if content hasn't changed
+    if (editingSection.content === editingSection.originalContent) {
+      setEditingSection(null);
+      return;
+    }
+
+    setEditingSection(prev => prev ? { ...prev, isSaving: true } : null);
+
     try {
-      await updatePaper(activePaper.id, { abstract: newAbstract });
+      await paperService.updateSection(activePaper.id, editingSection.sectionId, {
+        content: editingSection.content
+      });
+
       await refreshActivePaper();
+      await refreshPapers();
+
+      addNotification({
+        type: 'success',
+        title: 'Section Saved',
+        message: 'Section content saved successfully',
+        autoRemove: true,
+      });
+
+      setEditingSection(null);
     } catch (error) {
-      console.error('Failed to update abstract:', error);
+      console.error('Failed to save section:', error);
+      addNotification({
+        type: 'error',
+        title: 'Save Failed',
+        message: 'Failed to save section content',
+      });
+      
+      setEditingSection(prev => prev ? { ...prev, isSaving: false } : null);
     }
   };
 
@@ -147,18 +203,6 @@ const CurrentPaperComponent: React.FC = () => {
       await refreshActivePaper();
     } catch (error) {
       console.error('Failed to update research area:', error);
-    }
-  };
-
-  const addCoAuthor = async (authorName: string) => {
-    if (authorName.trim() && !coAuthors.includes(authorName.trim())) {
-      try {
-        await updatePaper(activePaper.id, {
-          coAuthors: [...coAuthors, authorName.trim()]
-        });
-      } catch (error) {
-        console.error('Failed to add co-author:', error);
-      }
     }
   };
 
@@ -198,9 +242,7 @@ const CurrentPaperComponent: React.FC = () => {
     }
   };
 
-  const abstractWordCount = activePaper.abstract ? activePaper.abstract.trim().split(/\s+/).length : 0;
-
-  // ✅ Search friends as user types
+  // Search friends as user types
   const searchFriends = async (query: string) => {
     if (query.length < 2) {
       setSearchResults([]);
@@ -227,7 +269,6 @@ const CurrentPaperComponent: React.FC = () => {
     }
   };
 
-  // ✅ FIXED: Add friend as co-author
   const addFriendAsCoAuthor = async (friend: Friend) => {
     if (!activePaper?.id) {
       addNotification({
@@ -240,8 +281,6 @@ const CurrentPaperComponent: React.FC = () => {
 
     try {
       const token = localStorage.getItem('auth_token');
-      
-      console.log('🔄 Adding friend as co-author:', { userId: friend.id, paperId: activePaper.id });
       
       const response = await fetch('http://127.0.0.1:8000/api/v1/collaborations/add-friend-to-paper', {
         method: 'POST',
@@ -261,10 +300,6 @@ const CurrentPaperComponent: React.FC = () => {
         throw new Error(errorData.detail || 'Failed to add collaborator');
       }
 
-      const data = await response.json();
-      
-      console.log('✅ Successfully added co-author:', data);
-
       addNotification({
         type: 'success',
         title: 'Co-author Added!',
@@ -272,10 +307,8 @@ const CurrentPaperComponent: React.FC = () => {
         autoRemove: true,
       });
 
-      // Refresh active paper
       await refreshActivePaper();
       
-      // Close search
       setCoAuthorInput('');
       setSearchResults([]);
       setShowSearchDropdown(false);
@@ -290,26 +323,21 @@ const CurrentPaperComponent: React.FC = () => {
     }
   };
 
-  // ✅ FIXED: Handle Enter key
   const handleCoAuthorKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       const input = coAuthorInput.trim();
       
       if (!input) return;
 
-      // Check if it's an email
       const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
       
       if (searchResults.length > 0) {
-        // User found in search - add directly
         await addFriendAsCoAuthor(searchResults[0]);
       } else if (isEmail) {
-        // No match - show invite prompt
         setNotFoundEmail(input);
         setShowInvitePrompt(true);
         setShowSearchDropdown(false);
       } else {
-        // Not an email - show error
         addNotification({
           type: 'error',
           title: 'User Not Found',
@@ -319,7 +347,6 @@ const CurrentPaperComponent: React.FC = () => {
     }
   };
 
-  // ✅ Handle invite modal
   const handleInviteNotFound = () => {
     setShowInvitePrompt(false);
     setShowInviteModal(true);
@@ -436,7 +463,7 @@ const CurrentPaperComponent: React.FC = () => {
           </div>
         </div>
 
-        {/* Sections List */}
+        {/* ✅ Sections List with Inline Editing */}
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Paper Sections</h3>
           {sections.length === 0 ? (
@@ -448,37 +475,123 @@ const CurrentPaperComponent: React.FC = () => {
               {sections
                 .sort((a, b) => a.order - b.order)
                 .map((section) => {
+                  const isEditing = editingSection?.sectionId === section.id;
+                  
                   return (
                     <div
                       key={section.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setSelectedSection(selectedSection === section.id ? null : section.id)}
+                      className="border rounded-lg hover:bg-gray-50 transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">{getStatusIcon(section.status)}</span>
-                        <div>
-                          <h4 className="font-medium text-gray-900">{section.title}</h4>
-                          <p className="text-sm text-gray-600">
-                            {section.wordCount} words • Last modified: {section.lastModified instanceof Date ? section.lastModified.toLocaleDateString() : new Date(section.lastModified).toLocaleDateString()}
-                          </p>
+                      {/* Section Header */}
+                      <div
+                        className="flex items-center justify-between p-4 cursor-pointer"
+                        onClick={() => !isEditing && setSelectedSection(selectedSection === section.id ? null : section.id)}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <span className="text-lg">{getStatusIcon(section.status)}</span>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900">{section.title}</h4>
+                            <p className="text-sm text-gray-600">
+                              {section.wordCount} words • Last modified: {section.lastModified instanceof Date ? section.lastModified.toLocaleDateString() : new Date(section.lastModified).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(section.status)}`}>
+                            {section.status.replace('-', ' ')}
+                          </span>
+                          
+                          <select
+                            value={section.status}
+                            onChange={(e) => updateSectionStatus(section.id, e.target.value as PaperSection['status'])}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-sm border rounded px-2 py-1 hover:border-blue-500 focus:outline-none focus:border-blue-500"
+                          >
+                            <option value="not-started">Not Started</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="needs-review">Needs Review</option>
+                            <option value="completed">Completed</option>
+                          </select>
+                          
+                          {/* ✅ EDIT ICON */}
+                          {!isEditing && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditingSection(section);
+                              }}
+                              className="p-2 hover:bg-blue-50 rounded-lg transition-colors text-blue-600 hover:text-blue-700"
+                              title="Edit section content"
+                            >
+                              <Edit3 size={16} />
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(section.status)}`}>
-                          {section.status.replace('-', ' ')}
-                        </span>
-                        <select
-                          value={section.status}
-                          onChange={(e) => updateSectionStatus(section.id, e.target.value as PaperSection['status'])}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-sm border rounded px-2 py-1"
-                        >
-                          <option value="not-started">Not Started</option>
-                          <option value="in-progress">In Progress</option>
-                          <option value="needs-review">Needs Review</option>
-                          <option value="completed">Completed</option>
-                        </select>
-                      </div>
+
+                      {/* ✅ INLINE EDITOR */}
+                      {isEditing && (
+                        <div className="px-4 pb-4 space-y-3 border-t bg-gray-50">
+                          <div className="pt-3">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Section Content
+                            </label>
+                            <textarea
+                              value={editingSection.content}
+                              onChange={(e) => setEditingSection(prev => 
+                                prev ? { ...prev, content: e.target.value } : null
+                              )}
+                              disabled={editingSection.isSaving}
+                              className="w-full h-64 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                              placeholder={`Write your ${section.title.toLowerCase()} here...`}
+                            />
+                            <div className="mt-1 text-xs text-gray-500">
+                              {editingSection.content.trim().split(/\s+/).filter(Boolean).length} words
+                            </div>
+                          </div>
+                          
+                          {/* Action Buttons */}
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={cancelEditingSection}
+                              disabled={editingSection.isSaving}
+                              className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <X size={16} />
+                              Cancel
+                            </button>
+                            <button
+                              onClick={saveSectionContent}
+                              disabled={editingSection.isSaving || editingSection.content === editingSection.originalContent}
+                              className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {editingSection.isSaving ? (
+                                <>
+                                  <Loader size={16} className="animate-spin" />
+                                  Saving...
+                                </>
+                              ) : (
+                                <>
+                                  <Check size={16} />
+                                  Save Changes
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Section Preview (when expanded but not editing) */}
+                      {selectedSection === section.id && !isEditing && section.content && (
+                        <div className="px-4 pb-4 border-t">
+                          <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                              {section.content || 'No content yet...'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -486,24 +599,7 @@ const CurrentPaperComponent: React.FC = () => {
           )}
         </div>
 
-        {/* Abstract Section */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Abstract</h3>
-          <textarea
-            value={activePaper.abstract || ''}
-            onChange={(e) => updateAbstract(e.target.value)}
-            placeholder="Write your paper abstract here..."
-            className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <div className="flex justify-between items-center mt-2 text-sm text-gray-600">
-            <span>Abstract: {abstractWordCount} words</span>
-            <span className={abstractWordCount >= 150 && abstractWordCount <= 250 ? 'text-green-600' : 'text-gray-500'}>
-              Recommended: 150-250 words
-            </span>
-          </div>
-        </div>
-
-        {/* Research Area and Co-authors */}
+        {/* ✅ KEPT: Research Area and Co-authors (NOT REMOVED) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-lg shadow-sm border">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -519,7 +615,7 @@ const CurrentPaperComponent: React.FC = () => {
             />
           </div>
           
-          {/* ✅ Co-authors with Smart Search */}
+          {/* Co-authors with Smart Search */}
           <div className="bg-white p-6 rounded-lg shadow-sm border">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <Users size={18} />
@@ -590,7 +686,7 @@ const CurrentPaperComponent: React.FC = () => {
         </div>
       </div>
 
-      {/* ✅ User Not Found Prompt */}
+      {/* User Not Found Prompt */}
       {showInvitePrompt && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
@@ -623,7 +719,7 @@ const CurrentPaperComponent: React.FC = () => {
         </div>
       )}
 
-      {/* ✅ Invite Modal */}
+      {/* Invite Modal */}
       <InviteCollaboratorsModal
         isOpen={showInviteModal}
         onClose={() => {

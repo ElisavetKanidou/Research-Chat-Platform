@@ -1,3 +1,4 @@
+// paper/ResearchChatPlatform.tsx - UPDATED WITH TAB NAVIGATION
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Download, Settings, Loader, CheckCircle, XCircle, Plus, ChevronDown } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
@@ -50,11 +51,15 @@ interface PersonalizationSettings {
 
 interface ResearchChatPlatformProps {
   paperContext?: Paper;
+  onNavigateToSettings?: () => void; // ✅ NEW: Callback to navigate to settings tab
 }
 
 const API_URL = 'http://127.0.0.1:8000/api/v1';
 
-const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContext: paperContextProp }) => {
+const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ 
+  paperContext: paperContextProp,
+  onNavigateToSettings // ✅ NEW: Receive callback from parent
+}) => {
   const { papers, user, addNotification } = useGlobalContext();
   
   const [currentPaper, setCurrentPaper] = useState<Paper | undefined>(paperContextProp);
@@ -95,7 +100,6 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContex
     personalLevel: user?.preferences?.aiPersonalization?.personalLevel || 8,
     globalLevel: user?.preferences?.aiPersonalization?.globalLevel || 5
   });
-  const [showSettings, setShowSettings] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -105,9 +109,6 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContex
   // Load chat history on mount and when paper changes
   useEffect(() => {
     const loadChatHistory = async () => {
-      // ✅ FIX: Always reload when paper changes
-      // DON'T check messages.length here!
-
       try {
         const token = getAuthToken();
         if (!token) {
@@ -117,7 +118,6 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContex
 
         console.log('📜 Loading chat history for paper:', paperContext?.id || 'all papers');
         
-        // ✅ Clear messages first (loading state)
         setMessages([]);
         
         const response = await fetch(
@@ -141,7 +141,6 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContex
           return;
         }
 
-        // Convert backend format to UI format
         const loadedMessages: Message[] = historyData.map((msg: any) => ({
           id: msg.id || `msg-${Date.now()}-${Math.random()}`,
           type: msg.role === 'user' ? 'user' : 'assistant',
@@ -161,22 +160,21 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContex
     };
 
     loadChatHistory();
-  }, [paperContext?.id]); // ✅ Re-run when paper ID changes
+  }, [paperContext?.id]);
 
-  // Helper function to create welcome message
   const createWelcomeMessage = (): Message => ({
     id: 'welcome',
     type: 'assistant',
     content: `Welcome to ResearchChat-AI! I'm your personalized research assistant. I can help you develop research ideas, find related papers, identify gaps, and guide you through the entire paper writing process.
 
-  Current personalization settings:
-  - Lab papers influence: ${personalization.labLevel}/10
-  - Your personal papers influence: ${personalization.personalLevel}/10  
-  - Global literature influence: ${personalization.globalLevel}/10
+Current personalization settings:
+- Lab papers influence: ${personalization.labLevel}/10
+- Your personal papers influence: ${personalization.personalLevel}/10  
+- Global literature influence: ${personalization.globalLevel}/10
 
-  ${paperContext ? `Currently working on: "${paperContext.title}"` : 'No active paper selected.'}
+${paperContext ? `Currently working on: "${paperContext.title}"` : 'No active paper selected.'}
 
-  What research idea would you like to explore today?`,
+What research idea would you like to explore today?`,
     timestamp: new Date(),
     needsConfirmation: false,
     userApproved: null,
@@ -230,7 +228,7 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContex
           abstract: paperContext.abstract || '',
           co_authors: paperContext.coAuthors || [],
           current_word_count: paperContext.currentWordCount || 0,
-          target_word_count: paperContext.targetWordCount || 8000,  // Default 8000 words for academic papers
+          target_word_count: paperContext.targetWordCount || 8000,
         } : null,
         personalization_settings: {
           lab_level: personalization.labLevel,
@@ -438,61 +436,21 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContex
     });
   };
 
-  const PersonalizationSettingsComponent = () => (
-    <div className="bg-white p-6 rounded-lg shadow-lg border">
-      <h3 className="text-lg font-bold mb-6">Personalization Settings</h3>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Lab Papers Influence: {personalization.labLevel}/10
-          </label>
-          <input 
-            type="range" 
-            min="1" 
-            max="10" 
-            value={personalization.labLevel}
-            onChange={(e) => setPersonalization(prev => ({ ...prev, labLevel: parseInt(e.target.value) }))}
-            className="w-full" 
-          />
-          <p className="text-xs text-gray-500">How much to consider your lab's research patterns</p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Personal Papers Influence: {personalization.personalLevel}/10
-          </label>
-          <input 
-            type="range" 
-            min="1" 
-            max="10" 
-            value={personalization.personalLevel}
-            onChange={(e) => setPersonalization(prev => ({ ...prev, personalLevel: parseInt(e.target.value) }))}
-            className="w-full" 
-          />
-          <p className="text-xs text-gray-500">How much to adapt to your individual writing style</p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Global Literature Influence: {personalization.globalLevel}/10
-          </label>
-          <input 
-            type="range" 
-            min="1" 
-            max="10" 
-            value={personalization.globalLevel}
-            onChange={(e) => setPersonalization(prev => ({ ...prev, globalLevel: parseInt(e.target.value) }))}
-            className="w-full" 
-          />
-          <p className="text-xs text-gray-500">How much to consider broader field trends</p>
-        </div>
-      </div>
-      <button 
-        onClick={() => setShowSettings(false)}
-        className="mt-6 w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
-      >
-        Apply Settings
-      </button>
-    </div>
-  );
+  // ✅ NEW: Handle settings button click
+  const handleSettingsClick = () => {
+    if (onNavigateToSettings) {
+      // If parent provided navigation callback, use it
+      onNavigateToSettings();
+    } else {
+      // Fallback: show notification to guide user
+      addNotification({
+        type: 'info',
+        title: 'AI Settings',
+        message: 'Click the "AI Settings" tab above to configure personalization settings for this paper',
+        autoRemove: true,
+      });
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -630,13 +588,6 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContex
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Settings Panel */}
-      {showSettings && (
-        <div className="border-t bg-gray-50 p-4">
-          <PersonalizationSettingsComponent />
-        </div>
-      )}
-
       {/* Input Area */}
       <div className="border-t bg-white p-4">
         <div className="flex items-center gap-2 mb-3">
@@ -645,11 +596,11 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ paperContex
               Context: {paperContext.title}
             </div>
           )}
+          {/* ✅ UPDATED: Settings button now navigates to AI Settings tab */}
           <button
-            onClick={() => setShowSettings(!showSettings)}
-            className={`flex items-center gap-1 px-2 py-1 text-sm rounded ${
-              showSettings ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
-            }`}
+            onClick={handleSettingsClick}
+            className="flex items-center gap-1 px-2 py-1 text-sm rounded text-gray-600 hover:bg-gray-100 transition-colors"
+            title="Open AI Settings tab"
           >
             <Settings size={16} />
             Settings

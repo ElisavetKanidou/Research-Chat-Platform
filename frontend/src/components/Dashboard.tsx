@@ -1,4 +1,4 @@
-// components/Dashboard.tsx - FINAL WITH COLLABORATORS
+// components/Dashboard.tsx
 import React, { useState } from 'react';
 import { FileText, Clock, CheckCircle, Users, Calendar, TrendingUp, AlertCircle, Plus, ArrowRight } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
@@ -13,12 +13,15 @@ interface Deadline {
   paperId: string;
 }
 
+// 1. Προσθήκη του onViewAnalytics στο Interface
 interface DashboardProps {
   onPaperSelect: (paper: Paper) => void;
   onNewPaper: () => void;
+  onViewAnalytics: () => void; // <-- ΠΡΟΣΘΗΚΗ ΑΥΤΟΥ
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper }) => {
+// 2. Προσθήκη του onViewAnalytics στα props του component
+const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper, onViewAnalytics }) => {
   const { papers, loading, error, user } = useGlobalContext();
   const [showInviteModal, setShowInviteModal] = useState(false);
 
@@ -95,7 +98,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper }) => {
     .sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime())
     .slice(0, 5);
 
-  // Get upcoming deadlines (mock data based on papers)
+  // Get upcoming deadlines
   const upcomingDeadlines: Deadline[] = safePapers
     .filter(p => ['in-progress', 'in-review', 'revision'].includes(p.status))
     .map((paper, index) => ({
@@ -311,7 +314,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper }) => {
               </div>
             </div>
 
-            {/* ✅ FIXED: Collaborators Section */}
+            {/* Collaborators Section */}
             <div className="bg-white p-6 rounded-lg shadow-sm border">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Recent Collaborators</h3>
@@ -380,7 +383,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper }) => {
                   <Users size={20} className="text-green-600 mr-3" />
                   <span className="text-gray-700">Invite Collaborators</span>
                 </button>
-                <button className="flex items-center p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border">
+                {/* 3. Σύνδεση του onClick στο κουμπί */}
+                <button 
+                  onClick={onViewAnalytics} 
+                  className="flex items-center p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border"
+                >
                   <TrendingUp size={20} className="text-purple-600 mr-3" />
                   <span className="text-gray-700">View Analytics</span>
                 </button>
@@ -390,7 +397,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper }) => {
         </div>
       </div>
 
-      {/* ✅ Invite Modal */}
       <InviteCollaboratorsModal
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}

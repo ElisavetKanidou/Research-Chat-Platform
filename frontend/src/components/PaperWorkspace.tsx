@@ -1,14 +1,13 @@
-// components/PaperWorkspace.tsx - UPDATED VERSION WITH AI SETTINGS TAB
+// components/PaperWorkspace.tsx - UPDATED WITH SETTINGS NAVIGATION
 
 import React, { useState } from 'react';
 import { ArrowLeft, FileText, MessageSquare, BarChart3, Settings } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 
 import CurrentPaperComponent from '../paper/CurrentPaperComponent';
-//import ResearchChatDemo from '../paper/ResearchChatDemo';
 import ResearchChatPlatform from '../paper/ResearchChatPlatform';
 import ResearchProgressComponent from '../paper/ResearchProgressComponent';
-import PaperAISettingsComponent from '../paper/PaperAISettings';  // ✅ NEW IMPORT
+import PaperAISettingsComponent from '../paper/PaperAISettings';
 
 interface PaperWorkspaceProps {
   onClose?: () => void;
@@ -16,13 +15,18 @@ interface PaperWorkspaceProps {
 
 const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
   const { activePaper, setActivePaper } = useGlobalContext();
-  const [workspaceTab, setWorkspaceTab] = useState<'paper' | 'chat' | 'progress' | 'ai-settings'>('paper');  // ✅ Added 'ai-settings'
+  const [workspaceTab, setWorkspaceTab] = useState<'paper' | 'chat' | 'progress' | 'ai-settings'>('paper');
 
   const handleBack = () => {
     setActivePaper(null);
     if (onClose) {
       onClose();
     }
+  };
+
+  // ✅ NEW: Function to navigate to AI Settings tab (called from chat)
+  const handleNavigateToAISettings = () => {
+    setWorkspaceTab('ai-settings');
   };
 
   if (!activePaper) {
@@ -118,7 +122,6 @@ const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
             <span>Progress</span>
           </button>
           
-          {/* ✅ NEW: AI Settings Tab */}
           <button
             onClick={() => setWorkspaceTab('ai-settings')}
             className={`flex items-center gap-2 px-6 py-3 border-b-2 font-medium transition-colors ${
@@ -143,7 +146,11 @@ const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
         
         {workspaceTab === 'chat' && (
           <div className="h-full overflow-hidden">
-            <ResearchChatPlatform />
+            {/* ✅ UPDATED: Pass navigation callback to chat component */}
+            <ResearchChatPlatform 
+              paperContext={activePaper}
+              onNavigateToSettings={handleNavigateToAISettings}
+            />
           </div>
         )}
         
@@ -153,7 +160,6 @@ const PaperWorkspace: React.FC<PaperWorkspaceProps> = ({ onClose }) => {
           </div>
         )}
         
-        {/* ✅ NEW: AI Settings Content */}
         {workspaceTab === 'ai-settings' && (
           <div className="h-full overflow-y-auto p-6 bg-gray-50">
             <PaperAISettingsComponent paperId={activePaper.id} />

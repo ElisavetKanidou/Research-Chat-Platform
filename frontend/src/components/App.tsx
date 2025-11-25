@@ -1,4 +1,4 @@
-// components/App.tsx - COMPLETE 330 LINES VERSION
+// components/App.tsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { GlobalProvider, useGlobalContext } from '../contexts/GlobalContext';
 import { NotificationProvider } from '../contexts/NotificationContext';
@@ -125,6 +125,8 @@ const ResearchPlatform: React.FC = () => {
           <Dashboard
             onPaperSelect={handlePaperSelect}
             onNewPaper={handleNewPaper}
+            // ✅ ΔΙΟΡΘΩΣΗ: Προστέθηκε το prop για αλλαγή σελίδας
+            onViewAnalytics={() => setCurrentView('analytics')}
           />
         );
       case 'papers':
@@ -141,7 +143,13 @@ const ResearchPlatform: React.FC = () => {
       case 'settings':
         return <SettingsPanel />;
       default:
-        return <Dashboard onPaperSelect={handlePaperSelect} onNewPaper={handleNewPaper} />;
+        return (
+          <Dashboard 
+            onPaperSelect={handlePaperSelect} 
+            onNewPaper={handleNewPaper}
+            onViewAnalytics={() => setCurrentView('analytics')}
+          />
+        );
     }
   };
 
@@ -204,7 +212,6 @@ const ResearchPlatform: React.FC = () => {
                 {theme === 'light' ? '🌙' : '☀️'}
               </button>
               
-              {/* ✅ NOTIFICATION BELL - REPLACED LINE 220-226 */}
               <div className="relative z-50">
                 <NotificationBell />
               </div>
@@ -316,7 +323,6 @@ const AuthenticatedApp: React.FC = () => {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // ✅ WRAPPED WITH NOTIFICATION PROVIDER
   return (
     <GlobalProvider>
       <NotificationProvider>
