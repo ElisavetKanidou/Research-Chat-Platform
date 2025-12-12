@@ -1,6 +1,6 @@
 // paper/ResearchChatPlatform.tsx - UPDATED WITH TAB NAVIGATION
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Download, Settings, Loader, CheckCircle, XCircle, Plus, ChevronDown } from 'lucide-react';
+import { Send, Download, Settings, Loader, CheckCircle, XCircle, Plus, ChevronDown, Paperclip, X, FileText } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import type { Paper } from '../types/paper';
 import type { ChatMessageRequest, ChatMessageResponse, ChatAttachment } from '../types/api';
@@ -100,7 +100,9 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({
     personalLevel: user?.preferences?.aiPersonalization?.personalLevel || 8,
     globalLevel: user?.preferences?.aiPersonalization?.globalLevel || 5
   });
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -190,60 +192,165 @@ What research idea would you like to explore today?`,
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
     };
-    
+
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    
+
     return headers;
   };
 
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+
+    const validFiles: File[] = [];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+
+      // Check file type
+      if (!['pdf', 'txt'].includes(fileExtension || '')) {
+        addNotification({
+          type: 'error',
+          title: 'Invalid File Type',
+          message: `${file.name} is not supported. Only PDF and TXT files are allowed.`,
+        });
+        continue;
+      }
+
+      // Check file size
+      if (file.size > maxSize) {
+        addNotification({
+          type: 'error',
+          title: 'File Too Large',
+          message: `${file.name} exceeds 10MB limit.`,
+        });
+        continue;
+      }
+
+      validFiles.push(file);
+    }
+
+    setUploadedFiles(prev => [...prev, ...validFiles]);
+
+    if (validFiles.length > 0) {
+      addNotification({
+        type: 'success',
+        title: 'Files Added',
+        message: `${validFiles.length} file(s) ready to upload`,
+        autoRemove: true,
+      });
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+    if ((!inputMessage.trim() && uploadedFiles.length === 0) || isLoading) return;
 
     const messageContent = inputMessage.trim();
+    const filesToUpload = [...uploadedFiles];
     setInputMessage('');
+    setUploadedFiles([]);
     setIsLoading(true);
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       type: 'user',
-      content: messageContent,
+      content: messageContent || `Uploaded ${filesToUpload.length} file(s)`,
       timestamp: new Date(),
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
 
     try {
       console.log('🚀 Sending message to AI...', messageContent);
-      
-      const requestBody = {
-        content: messageContent,
-        paper_context: paperContext ? {
-          id: paperContext.id,
-          title: paperContext.title,
-          status: paperContext.status,
-          progress: paperContext.progress,
-          research_area: paperContext.researchArea || '',
-          abstract: paperContext.abstract || '',
-          co_authors: paperContext.coAuthors || [],
-          current_word_count: paperContext.currentWordCount || 0,
-          target_word_count: paperContext.targetWordCount || 8000,
-        } : null,
-        personalization_settings: {
+
+      let response;
+
+      if (filesToUpload.length > 0) {
+        // Use FormData when uploading files
+        const formData = new FormData();
+        formData.append('content', messageContent);
+
+        // Add files
+        filesToUpload.forEach((file, index) => {
+          formData.append('files', file);
+        });
+
+        // Add paper context as JSON string
+        if (paperContext) {
+          formData.append('paper_context', JSON.stringify({
+            id: paperContext.id,
+            title: paperContext.title,
+            status: paperContext.status,
+            progress: paperContext.progress,
+            research_area: paperContext.researchArea || '',
+            abstract: paperContext.abstract || '',
+            co_authors: paperContext.coAuthors || [],
+            current_word_count: paperContext.currentWordCount || 0,
+            target_word_count: paperContext.targetWordCount || 8000,
+          }));
+        }
+
+        // Add personalization settings as JSON string
+        formData.append('personalization_settings', JSON.stringify({
           lab_level: personalization.labLevel,
           personal_level: personalization.personalLevel,
           global_level: personalization.globalLevel,
-        }
-      };
+        }));
 
-      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
-      
-      const response = await fetch(`${API_URL}/chat/message`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(requestBody),
-      });
+        const token = getAuthToken();
+        const headers: HeadersInit = {};
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        response = await fetch(`${API_URL}/chat/upload`, {
+          method: 'POST',
+          headers: headers,
+          body: formData,
+        });
+      } else {
+        // Use JSON for text-only messages
+        const requestBody = {
+          content: messageContent,
+          paper_context: paperContext ? {
+            id: paperContext.id,
+            title: paperContext.title,
+            status: paperContext.status,
+            progress: paperContext.progress,
+            research_area: paperContext.researchArea || '',
+            abstract: paperContext.abstract || '',
+            co_authors: paperContext.coAuthors || [],
+            current_word_count: paperContext.currentWordCount || 0,
+            target_word_count: paperContext.targetWordCount || 8000,
+          } : null,
+          personalization_settings: {
+            lab_level: personalization.labLevel,
+            personal_level: personalization.personalLevel,
+            global_level: personalization.globalLevel,
+          }
+        };
+
+        console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
+
+        response = await fetch(`${API_URL}/chat/message`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(requestBody),
+        });
+      }
 
       console.log('📥 Response status:', response.status);
 
@@ -606,8 +713,57 @@ What research idea would you like to explore today?`,
             Settings
           </button>
         </div>
-        
-        <div className="flex gap-4">
+
+        {/* Uploaded Files Display */}
+        {uploadedFiles.length > 0 && (
+          <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="text-sm font-medium text-gray-700 mb-2">
+              Attached Files ({uploadedFiles.length}):
+            </div>
+            <div className="space-y-2">
+              {uploadedFiles.map((file, index) => (
+                <div key={index} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                  <div className="flex items-center gap-2">
+                    <FileText size={16} className="text-blue-600" />
+                    <span className="text-sm font-medium">{file.name}</span>
+                    <span className="text-xs text-gray-500">
+                      ({(file.size / 1024).toFixed(1)} KB)
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => removeFile(index)}
+                    className="text-red-500 hover:text-red-700 p-1"
+                    title="Remove file"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.txt"
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+
+          {/* File upload button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            title="Attach files (PDF, TXT)"
+            disabled={isLoading}
+          >
+            <Paperclip size={20} className="text-gray-600" />
+          </button>
+
           <input
             type="text"
             value={inputMessage}
@@ -617,9 +773,9 @@ What research idea would you like to explore today?`,
             className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isLoading}
           />
-          <button 
-            onClick={handleSendMessage} 
-            disabled={isLoading || !inputMessage.trim()}
+          <button
+            onClick={handleSendMessage}
+            disabled={isLoading || (!inputMessage.trim() && uploadedFiles.length === 0)}
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             <Send size={20} />

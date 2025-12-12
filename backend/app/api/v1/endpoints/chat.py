@@ -13,12 +13,16 @@ This is a complete, production-ready implementation with:
 from datetime import datetime
 import time
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from uuid import UUID
+import json
+import os
+import tempfile
+from pathlib import Path
 from app.api.v1.endpoints.auth import get_current_user
 from app.database.session import get_db
 from app.models.user import User
@@ -41,6 +45,72 @@ from app.core.exceptions import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ==================== FILE PROCESSING UTILITIES ====================
+
+async def extract_text_from_file(file: UploadFile) -> str:
+    """
+    Extract text content from uploaded files (PDF or TXT).
+
+    Args:
+        file: Uploaded file object
+
+    Returns:
+        Extracted text content
+
+    Raises:
+        HTTPException: If file processing fails
+    """
+    try:
+        file_extension = file.filename.split('.')[-1].lower() if file.filename else ''
+
+        if file_extension == 'txt':
+            # Read text file directly
+            content = await file.read()
+            return content.decode('utf-8', errors='ignore')
+
+        elif file_extension == 'pdf':
+            # For PDF files, we'll need PyPDF2 or similar library
+            # For now, let's create a temp file and extract text
+            try:
+                import PyPDF2
+                content = await file.read()
+
+                # Create temp file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                    tmp_file.write(content)
+                    tmp_file_path = tmp_file.name
+
+                # Extract text from PDF
+                text = ""
+                try:
+                    with open(tmp_file_path, 'rb') as pdf_file:
+                        pdf_reader = PyPDF2.PdfReader(pdf_file)
+                        for page in pdf_reader.pages:
+                            text += page.extract_text() + "\n"
+                finally:
+                    # Clean up temp file
+                    os.unlink(tmp_file_path)
+
+                return text
+
+            except ImportError:
+                logger.warning("PyPDF2 not installed, returning placeholder for PDF")
+                return f"[PDF content from {file.filename} - PDF processing library not available]"
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type: {file_extension}"
+            )
+
+    except Exception as e:
+        logger.error(f"Error extracting text from file {file.filename}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process file: {file.filename}"
+        )
 
 
 # ==================== CHAT ENDPOINTS ====================
@@ -142,6 +212,174 @@ async def send_chat_message(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while processing your message"
         )
+
+@router.post("/upload", response_model=ChatMessageResponse)
+async def send_chat_message_with_files(
+    content: str = Form(""),
+    files: List[UploadFile] = File(...),
+    paper_context: Optional[str] = Form(None),
+    personalization_settings: Optional[str] = Form(None),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Send a message with file attachments to AI assistant.
+
+    This endpoint handles file uploads (PDF, TXT) along with chat messages.
+    Files are processed and their content is extracted to provide context to the AI.
+
+    Supported file types:
+    - PDF (.pdf) - Text is extracted from PDF documents
+    - Text (.txt) - Plain text files
+
+    Returns:
+        ChatMessageResponse: AI-generated response considering file contents
+
+    Raises:
+        HTTPException: 400 for invalid files, 401 if unauthorized, 502 if AI service fails
+    """
+
+    logger.info(f"Chat message with {len(files)} file(s) from user {current_user.id}")
+
+    try:
+        # Validate file count
+        if len(files) > 10:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot upload more than 10 files at once"
+            )
+
+        # Extract text from all uploaded files
+        file_contents = []
+        for file in files:
+            if not file.filename:
+                continue
+
+            # Validate file size (10MB max)
+            file.file.seek(0, 2)  # Seek to end
+            file_size = file.file.tell()
+            file.file.seek(0)  # Reset to beginning
+
+            if file_size > 10 * 1024 * 1024:  # 10MB
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File {file.filename} exceeds 10MB limit"
+                )
+
+            # Validate file type
+            file_extension = file.filename.split('.')[-1].lower()
+            if file_extension not in ['pdf', 'txt']:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File type .{file_extension} is not supported. Only PDF and TXT files are allowed."
+                )
+
+            # Extract text from file
+            extracted_text = await extract_text_from_file(file)
+            file_contents.append({
+                'filename': file.filename,
+                'content': extracted_text,
+                'size': file_size
+            })
+
+        # Parse paper context if provided
+        paper = None
+        if paper_context:
+            try:
+                paper_context_dict = json.loads(paper_context)
+                if paper_context_dict and paper_context_dict.get('id'):
+                    paper = await paper_service.get_paper_by_id(
+                        db, paper_context_dict['id']
+                    )
+
+                    if not paper:
+                        raise NotFoundException("Paper not found")
+
+                    if not paper.is_viewable_by(str(current_user.id)):
+                        raise AuthorizationException("You don't have permission to access this paper")
+            except json.JSONDecodeError:
+                logger.warning("Invalid paper_context JSON")
+
+        # Parse personalization settings if provided
+        personalization = None
+        if personalization_settings:
+            try:
+                personalization = json.loads(personalization_settings)
+            except json.JSONDecodeError:
+                logger.warning("Invalid personalization_settings JSON")
+
+        # Build enhanced message content with file information
+        enhanced_content = content if content else "I've uploaded some files for you to analyze."
+        enhanced_content += "\n\n--- Uploaded Files ---\n"
+
+        for file_info in file_contents:
+            enhanced_content += f"\n**File: {file_info['filename']}** ({file_info['size'] / 1024:.1f} KB)\n"
+            enhanced_content += f"Content:\n{file_info['content'][:5000]}\n"  # Limit to first 5000 chars per file
+            if len(file_info['content']) > 5000:
+                enhanced_content += f"... (truncated, total length: {len(file_info['content'])} characters)\n"
+
+        # Process the chat message through AI service
+        ai_response = await ai_service.process_chat_message(
+            user=current_user,
+            message=enhanced_content,
+            paper_context=paper,
+            user_papers_context=None,
+            personalization_settings=personalization,
+            db=db
+        )
+
+        # Save conversation to database in background
+        background_tasks.add_task(
+            save_chat_conversation,
+            db,
+            str(current_user.id),
+            str(paper.id) if paper else None,
+            f"{content}\n[{len(files)} file(s) uploaded]",
+            ai_response.responseContent
+        )
+
+        logger.info(f"Successfully processed message with files for user {current_user.id}")
+
+        return {
+            "messageId": getattr(ai_response, 'messageId', f"msg-{current_user.id}-{int(time.time())}"),
+            "responseContent": getattr(ai_response, 'responseContent', str(ai_response)),
+            "createdAt": getattr(ai_response, 'createdAt', datetime.now().isoformat()),
+            "needsConfirmation": getattr(ai_response, 'needsConfirmation', False),
+            "attachments": getattr(ai_response, 'attachments', []),
+            "suggestions": getattr(ai_response, 'suggestions', []),
+            "metadata": getattr(ai_response, 'metadata', {
+                'uploaded_files': [f['filename'] for f in file_contents]
+            })
+        }
+
+    except AuthorizationException as e:
+        logger.warning(f"Authorization failed for user {current_user.id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e)
+        )
+    except NotFoundException as e:
+        logger.warning(f"Resource not found for user {current_user.id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except AIServiceException as e:
+        logger.error(f"AI service error for user {current_user.id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI service temporarily unavailable: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in file upload for user {current_user.id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while processing your files"
+        )
+
 
 @router.get("/history", response_model=List[ChatHistoryResponse])
 async def get_chat_history(
