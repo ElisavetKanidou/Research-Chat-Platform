@@ -4,6 +4,7 @@ import { FileText, Save, Download, Edit3, Calendar, Users, Target, UserPlus, X, 
 import { useGlobalContext } from '../contexts/GlobalContext';
 import type { PaperSection } from '../types/paper';
 import { paperService } from '../services/paperService';
+import { apiClient } from '../utils/apiHelpers';
 import InviteCollaboratorsModal from '../components/modals/InviteCollaboratorsModal';
 
 interface Friend {
@@ -251,8 +252,9 @@ const CurrentPaperComponent: React.FC = () => {
       });
 
       // Call the export API
+      const baseUrl = (apiClient as any).baseUrl || 'http://127.0.0.1:8000/api/v1';
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000'}/api/v1/papers/${activePaper.id}/export?format=${format}`,
+        `${baseUrl}/papers/${activePaper.id}/export?format=${format}`,
         {
           method: 'GET',
           headers: {
