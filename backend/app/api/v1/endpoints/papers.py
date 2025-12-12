@@ -3,8 +3,10 @@ Paper management CRUD API endpoints
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
+from sqlalchemy.orm import selectinload
 
 from app.api.v1.endpoints.auth import get_current_user
 from app.database.session import get_db
@@ -16,6 +18,7 @@ from app.schemas.paper import (
 )
 from app.core.exceptions import NotFoundException, AuthorizationException, ValidationException
 from app.services.paper_service import paper_service
+from app.services.paper_export_service import paper_export_service
 from app.schemas.paper import PaperAISettingsUpdate, PaperAISettingsResponse
 
 router = APIRouter()
@@ -496,3 +499,86 @@ async def update_paper_ai_settings(
         "paperId": str(paper.id),
         "settings": camel_case_settings
     }
+
+
+@router.get("/{paper_id}/export")
+async def export_paper(
+        paper_id: str,
+        format: str = Query("pdf", description="Export format: pdf, word, or latex"),
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    Export paper in specified format (PDF, Word, or LaTeX)
+
+    Args:
+        paper_id: Paper ID
+        format: Export format (pdf, word, latex)
+
+    Returns:
+        File download response with appropriate content type
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info(f"📤 Export request for paper {paper_id} in format: {format}")
+
+    # Validate format
+    valid_formats = ["pdf", "word", "latex"]
+    if format.lower() not in valid_formats:
+        raise ValidationException(
+            f"Invalid export format: {format}. Must be one of: {', '.join(valid_formats)}"
+        )
+
+    # Get paper with sections eagerly loaded
+    query = (
+        select(Paper)
+        .options(selectinload(Paper.sections))
+        .where(Paper.id == paper_id)
+    )
+    result = await db.execute(query)
+    paper = result.scalar_one_or_none()
+
+    if not paper:
+        raise NotFoundException("Paper")
+
+    # Check permissions
+    if not paper.is_viewable_by(str(current_user.id)):
+        raise AuthorizationException("You don't have permission to view this paper")
+
+    # Generate export based on format
+    try:
+        if format.lower() == "pdf":
+            content = paper_export_service.export_to_pdf(paper)
+            media_type = "application/pdf"
+            extension = "pdf"
+        elif format.lower() == "word":
+            content = paper_export_service.export_to_word(paper)
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            extension = "docx"
+        else:  # latex
+            content = paper_export_service.export_to_latex(paper)
+            media_type = "application/x-latex"
+            extension = "tex"
+
+        # Create safe filename
+        safe_title = "".join(c for c in paper.title if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_title = safe_title.replace(' ', '_')
+        filename = f"{safe_title}.{extension}"
+
+        logger.info(f"✅ Export completed: {filename}")
+
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Export failed for paper {paper_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export paper: {str(e)}"
+        )

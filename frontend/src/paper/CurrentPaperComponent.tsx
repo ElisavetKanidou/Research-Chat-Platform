@@ -1,6 +1,6 @@
 // components/paper/CurrentPaperComponent.tsx - FINAL VERSION (NO DUPLICATE ABSTRACT)
-import React, { useState } from 'react';
-import { FileText, Save, Download, Edit3, Calendar, Users, Target, UserPlus, X, Check, Loader } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { FileText, Save, Download, Edit3, Calendar, Users, Target, UserPlus, X, Check, Loader, ChevronDown } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import type { PaperSection } from '../types/paper';
 import { paperService } from '../services/paperService';
@@ -31,9 +31,31 @@ const CurrentPaperComponent: React.FC = () => {
   const [showInvitePrompt, setShowInvitePrompt] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [notFoundEmail, setNotFoundEmail] = useState('');
-  
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Refs for dropdown
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
+
   // ✅ Editing state for sections
   const [editingSection, setEditingSection] = useState<EditingSectionState | null>(null);
+
+  // Close export dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
+        setShowExportDropdown(false);
+      }
+    };
+
+    if (showExportDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showExportDropdown]);
 
   if (!activePaper) {
     return (
@@ -215,13 +237,74 @@ const CurrentPaperComponent: React.FC = () => {
     }
   };
 
-  const exportToPDF = () => {
-    console.log('Exporting to PDF...');
-    addNotification({
-      type: 'info',
-      title: 'Export Started',
-      message: 'PDF export is being processed...',
-    });
+  const exportPaper = async (format: 'pdf' | 'word' | 'latex') => {
+    if (!activePaper?.id) return;
+
+    setIsExporting(true);
+    setShowExportDropdown(false);
+
+    try {
+      addNotification({
+        type: 'info',
+        title: 'Export Started',
+        message: `Exporting paper to ${format.toUpperCase()}...`,
+      });
+
+      // Call the export API
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000'}/api/v1/papers/${activePaper.id}/export?format=${format}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.statusText}`);
+      }
+
+      // Get the blob from response
+      const blob = await response.blob();
+
+      // Get filename from Content-Disposition header or create default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `${activePaper.title}.${format === 'word' ? 'docx' : format === 'latex' ? 'tex' : format}`;
+
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      addNotification({
+        type: 'success',
+        title: 'Export Successful',
+        message: `Paper exported to ${format.toUpperCase()} successfully!`,
+        autoRemove: true,
+      });
+    } catch (error) {
+      console.error('Export failed:', error);
+      addNotification({
+        type: 'error',
+        title: 'Export Failed',
+        message: error instanceof Error ? error.message : 'Failed to export paper',
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const saveToCloud = async () => {
@@ -412,13 +495,55 @@ const CurrentPaperComponent: React.FC = () => {
                 <Save size={16} />
                 Save
               </button>
-              <button
-                onClick={exportToPDF}
-                className="flex items-center gap-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
-              >
-                <Download size={16} />
-                Export PDF
-              </button>
+
+              {/* Export Dropdown */}
+              <div className="relative" ref={exportDropdownRef}>
+                <button
+                  onClick={() => setShowExportDropdown(!showExportDropdown)}
+                  disabled={isExporting}
+                  className="flex items-center gap-1 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader size={16} className="animate-spin" />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download size={16} />
+                      Export
+                      <ChevronDown size={14} />
+                    </>
+                  )}
+                </button>
+
+                {/* Dropdown Menu */}
+                {showExportDropdown && (
+                  <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                    <button
+                      onClick={() => exportPaper('pdf')}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                    >
+                      <Download size={14} />
+                      PDF
+                    </button>
+                    <button
+                      onClick={() => exportPaper('word')}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                    >
+                      <Download size={14} />
+                      Word (.docx)
+                    </button>
+                    <button
+                      onClick={() => exportPaper('latex')}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                    >
+                      <Download size={14} />
+                      LaTeX (.tex)
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
