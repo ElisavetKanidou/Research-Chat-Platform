@@ -47,6 +47,28 @@ async def get_current_user(
         )
 
 
+async def get_current_user_ws(
+        token: str,
+        db: AsyncSession
+) -> User:
+    """Get current authenticated user from WebSocket token"""
+    try:
+        payload = auth_service.verify_token(token, "access")
+        user_id = payload.get("sub")
+
+        if user_id is None:
+            raise AuthenticationException("Invalid token payload")
+
+        user = await auth_service.get_user_by_id(db, user_id)
+        if user is None or not user.is_active:
+            raise AuthenticationException("User not found or inactive")
+
+        return user
+
+    except Exception as e:
+        raise AuthenticationException(f"WebSocket authentication failed: {str(e)}")
+
+
 @router.post("/register", response_model=LoginResponse)
 async def register(
         user_data: RegisterRequest,

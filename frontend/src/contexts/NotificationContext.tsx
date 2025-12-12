@@ -1,11 +1,13 @@
-// contexts/NotificationContext.tsx - FINAL FIXED VERSION
+// contexts/NotificationContext.tsx - REAL-TIME WITH WEBSOCKET
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Notification } from '../types/notification';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
   loading: boolean;
+  isConnected: boolean; // NEW: WebSocket connection status
   fetchNotifications: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
@@ -19,6 +21,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+
+  // ✅ NEW: Use WebSocket for real-time updates
+  const { isConnected, lastMessage, subscribe } = useWebSocket();
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('auth_token');
@@ -54,7 +59,56 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } finally {
       setLoading(false);
     }
-  }, []); // ✅ Empty dependency array
+  }, []);
+
+  // ✅ Handle real-time WebSocket messages
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    console.log('📨 Received WebSocket message:', lastMessage);
+
+    // Handle different message types
+    switch (lastMessage.type) {
+      case 'notification':
+        // Add new notification to the list
+        const newNotification: Notification = {
+          id: `ws-${Date.now()}`,
+          type: lastMessage.notification_type,
+          title: lastMessage.title,
+          message: lastMessage.message,
+          is_read: false,
+          created_at: lastMessage.timestamp,
+          data: lastMessage.data
+        };
+        setNotifications(prev => [newNotification, ...prev]);
+        setUnreadCount(prev => prev + 1);
+        console.log('🔔 New notification added:', newNotification);
+        break;
+
+      case 'paper_update':
+        console.log('📄 Paper update received:', lastMessage);
+        // Optionally add paper update as notification
+        break;
+
+      case 'collaboration':
+        console.log('👥 Collaboration update received:', lastMessage);
+        // Optionally add collaboration update as notification
+        break;
+
+      case 'connected':
+        console.log('✅ WebSocket connected:', lastMessage.message);
+        // Subscribe to notification channel
+        subscribe('notifications');
+        break;
+
+      case 'pong':
+        // Heartbeat response
+        break;
+
+      default:
+        console.log('❓ Unknown message type:', lastMessage.type);
+    }
+  }, [lastMessage, subscribe]);
 
   const markAsRead = async (id: string) => {
     try {
@@ -68,7 +122,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         method: 'POST',
         headers: getAuthHeaders()
       });
-      
+
       if (!response.ok) {
         // Revert on failure
         await fetchNotifications();
@@ -84,7 +138,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Optimistic update
       const previousNotifications = notifications;
       const previousUnreadCount = unreadCount;
-      
+
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
 
@@ -92,7 +146,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         method: 'POST',
         headers: getAuthHeaders()
       });
-      
+
       if (!response.ok) {
         // Revert on failure
         setNotifications(previousNotifications);
@@ -109,11 +163,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Optimistic update
       const notificationToDelete = notifications.find(n => n.id === id);
       setNotifications(prev => prev.filter(n => n.id !== id));
-      
+
       if (notificationToDelete && !notificationToDelete.is_read) {
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
-      
+
       const response = await fetch(`http://127.0.0.1:8000/api/v1/notifications/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
@@ -134,7 +188,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Optimistic update
       const previousNotifications = notifications;
       const previousUnreadCount = unreadCount;
-      
+
       setNotifications([]);
       setUnreadCount(0);
 
@@ -142,7 +196,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         method: 'DELETE',
         headers: getAuthHeaders()
       });
-      
+
       if (!response.ok) {
         // Revert on failure
         setNotifications(previousNotifications);
@@ -154,21 +208,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
-  // ✅ FIXED: Fetch on mount and refresh every 30 seconds
+  // ✅ Fetch initial notifications ONCE on mount (no more polling!)
   useEffect(() => {
-    console.log('🔔 NotificationProvider mounted, fetching notifications...');
+    console.log('🔔 NotificationProvider mounted, fetching initial notifications...');
     fetchNotifications();
-    
-    const interval = setInterval(() => {
-      console.log('🔄 Refreshing notifications...');
-      fetchNotifications();
-    }, 30000); // Refresh every 30 seconds
-
-    return () => {
-      console.log('🔔 NotificationProvider unmounting...');
-      clearInterval(interval);
-    };
-  }, []); // ✅ Empty dependency array - only run once on mount
+  }, []); // Only run once on mount
 
   return (
     <NotificationContext.Provider
@@ -176,6 +220,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         notifications,
         unreadCount,
         loading,
+        isConnected, // NEW: Expose WebSocket connection status
         fetchNotifications,
         markAsRead,
         markAllAsRead,
