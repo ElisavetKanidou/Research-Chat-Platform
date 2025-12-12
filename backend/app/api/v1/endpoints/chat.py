@@ -36,6 +36,8 @@ from app.schemas.chat import (
 from app.services.ai_service import ai_service
 from app.services.paper_service import paper_service
 from app.services.section_content_service import section_content_service
+from app.services.gemini_service import gemini_service
+from app.services.file_comparison_service import file_comparison_service
 from app.core.exceptions import (
     NotFoundException, ValidationException,
     AIServiceException, AuthorizationException
@@ -309,25 +311,108 @@ async def send_chat_message_with_files(
             except json.JSONDecodeError:
                 logger.warning("Invalid personalization_settings JSON")
 
-        # Build enhanced message content with file information
-        enhanced_content = content if content else "I've uploaded some files for you to analyze."
-        enhanced_content += "\n\n--- Uploaded Files ---\n"
+        # Compare files if multiple uploaded
+        comparison_summary = ""
+        if len(file_contents) >= 2:
+            logger.info(f"📊 Comparing {len(file_contents)} files")
+            comparisons = file_comparison_service.compare_multiple_files(file_contents)
+            comparison_summary = file_comparison_service.generate_comparison_summary(comparisons)
 
-        for file_info in file_contents:
-            enhanced_content += f"\n**File: {file_info['filename']}** ({file_info['size'] / 1024:.1f} KB)\n"
-            enhanced_content += f"Content:\n{file_info['content'][:5000]}\n"  # Limit to first 5000 chars per file
-            if len(file_info['content']) > 5000:
-                enhanced_content += f"... (truncated, total length: {len(file_info['content'])} characters)\n"
+        # Try using Gemini first (FREE and better for research), fallback to OpenAI
+        try:
+            if gemini_service.enabled:
+                logger.info("🤖 Using Gemini AI for response generation")
 
-        # Process the chat message through AI service
-        ai_response = await ai_service.process_chat_message(
-            user=current_user,
-            message=enhanced_content,
-            paper_context=paper,
-            user_papers_context=None,
-            personalization_settings=personalization,
-            db=db
-        )
+                # Prepare paper context for Gemini
+                paper_ctx = None
+                if paper:
+                    paper_ctx = {
+                        'title': paper.title,
+                        'research_area': paper.research_area or '',
+                        'status': paper.status.value if hasattr(paper.status, 'value') else str(paper.status),
+                        'progress': paper.progress,
+                        'current_word_count': paper.current_word_count,
+                        'target_word_count': paper.target_word_count,
+                    }
+
+                # Add comparison summary to user message
+                user_message_with_comparison = content if content else "I've uploaded files for analysis."
+                if comparison_summary:
+                    user_message_with_comparison += f"\n\n{comparison_summary}"
+
+                # Generate response with Gemini
+                gemini_response = await gemini_service.generate_response(
+                    message=user_message_with_comparison,
+                    files_content=file_contents,
+                    personalization=personalization,
+                    paper_context=paper_ctx
+                )
+
+                # Create response object
+                class GeminiResponseWrapper:
+                    def __init__(self, gemini_data):
+                        self.messageId = f"gemini-{current_user.id}-{int(time.time())}"
+                        self.responseContent = gemini_data['content']
+                        self.createdAt = datetime.now().isoformat()
+                        self.needsConfirmation = False
+                        self.attachments = []
+                        self.suggestions = gemini_data.get('citations', [])
+                        self.metadata = gemini_data.get('metadata', {})
+                        self.metadata['model'] = 'gemini-1.5-flash'
+                        if comparison_summary:
+                            self.metadata['file_comparison'] = comparison_summary
+
+                ai_response = GeminiResponseWrapper(gemini_response)
+
+            else:
+                # Fallback to OpenAI
+                logger.info("🤖 Gemini not available, using OpenAI")
+
+                enhanced_content = content if content else "I've uploaded some files for you to analyze."
+                enhanced_content += "\n\n--- Uploaded Files ---\n"
+
+                for file_info in file_contents:
+                    enhanced_content += f"\n**File: {file_info['filename']}** ({file_info['size'] / 1024:.1f} KB)\n"
+                    enhanced_content += f"Content:\n{file_info['content'][:5000]}\n"
+                    if len(file_info['content']) > 5000:
+                        enhanced_content += f"... (truncated, total length: {len(file_info['content'])} characters)\n"
+
+                if comparison_summary:
+                    enhanced_content += f"\n\n{comparison_summary}"
+
+                ai_response = await ai_service.process_chat_message(
+                    user=current_user,
+                    message=enhanced_content,
+                    paper_context=paper,
+                    user_papers_context=None,
+                    personalization_settings=personalization,
+                    db=db
+                )
+
+        except Exception as gemini_error:
+            logger.warning(f"⚠️ Gemini failed, falling back to OpenAI: {str(gemini_error)}")
+
+            # Fallback to OpenAI
+            enhanced_content = content if content else "I've uploaded some files for you to analyze."
+            enhanced_content += "\n\n--- Uploaded Files ---\n"
+
+            for file_info in file_contents:
+                enhanced_content += f"\n**File: {file_info['filename']}** ({file_info['size'] / 1024:.1f} KB)\n"
+                enhanced_content += f"Content:\n{file_info['content'][:5000]}\n"
+                if len(file_info['content']) > 5000:
+                    enhanced_content += f"... (truncated, total length: {len(file_info['content'])} characters)\n"
+
+            if comparison_summary:
+                enhanced_content += f"\n\n{comparison_summary}"
+
+            ai_response = await ai_service.process_chat_message(
+                user=current_user,
+                message=enhanced_content,
+                paper_context=paper,
+                user_papers_context=None,
+                personalization_settings=personalization,
+                db=db
+            )
 
         # Save conversation to database in background
         background_tasks.add_task(

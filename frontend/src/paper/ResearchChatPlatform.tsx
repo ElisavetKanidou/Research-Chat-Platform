@@ -101,6 +101,8 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({
     globalLevel: user?.preferences?.aiPersonalization?.globalLevel || 5
   });
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<'gemini' | 'gpt-3.5' | 'gpt-4'>('gemini');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -253,6 +255,64 @@ What research idea would you like to explore today?`,
 
   const removeFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    const validFiles: File[] = [];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+
+    for (const file of droppedFiles) {
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+
+      // Check file type
+      if (!['pdf', 'txt'].includes(fileExtension || '')) {
+        addNotification({
+          type: 'error',
+          title: 'Invalid File Type',
+          message: `${file.name} is not supported. Only PDF and TXT files are allowed.`,
+        });
+        continue;
+      }
+
+      // Check file size
+      if (file.size > maxSize) {
+        addNotification({
+          type: 'error',
+          title: 'File Too Large',
+          message: `${file.name} exceeds 10MB limit.`,
+        });
+        continue;
+      }
+
+      validFiles.push(file);
+    }
+
+    if (validFiles.length > 0) {
+      setUploadedFiles(prev => [...prev, ...validFiles]);
+      addNotification({
+        type: 'success',
+        title: 'Files Added',
+        message: `${validFiles.length} file(s) ready to upload`,
+        autoRemove: true,
+      });
+    }
   };
 
   const handleSendMessage = async () => {
@@ -697,13 +757,26 @@ What research idea would you like to explore today?`,
 
       {/* Input Area */}
       <div className="border-t bg-white p-4">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           {paperContext && (
             <div className="text-sm text-gray-600 bg-blue-50 px-2 py-1 rounded">
-              Context: {paperContext.title}
+              📄 {paperContext.title}
             </div>
           )}
-          {/* ✅ UPDATED: Settings button now navigates to AI Settings tab */}
+
+          {/* AI Model Selection */}
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value as 'gemini' | 'gpt-3.5' | 'gpt-4')}
+            className="text-sm px-3 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 cursor-pointer"
+            title="Select AI Model"
+          >
+            <option value="gemini">🤖 Gemini (FREE, Fast)</option>
+            <option value="gpt-3.5">💬 GPT-3.5 (Balanced)</option>
+            <option value="gpt-4">🧠 GPT-4 (Best Quality)</option>
+          </select>
+
+          {/* Settings button */}
           <button
             onClick={handleSettingsClick}
             className="flex items-center gap-1 px-2 py-1 text-sm rounded text-gray-600 hover:bg-gray-100 transition-colors"
@@ -743,7 +816,25 @@ What research idea would you like to explore today?`,
           </div>
         )}
 
-        <div className="flex gap-2">
+        {/* Drag & Drop Zone (shown when dragging) */}
+        {isDragging && (
+          <div
+            className="mb-3 p-8 border-2 border-dashed border-blue-500 rounded-lg bg-blue-50 text-center"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <FileText size={48} className="mx-auto text-blue-500 mb-2" />
+            <p className="text-blue-700 font-medium">Drop files here</p>
+            <p className="text-sm text-blue-600">PDF, TXT (max 10MB)</p>
+          </div>
+        )}
+
+        <div
+          className="flex gap-2"
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
           {/* Hidden file input */}
           <input
             ref={fileInputRef}
@@ -758,7 +849,7 @@ What research idea would you like to explore today?`,
           <button
             onClick={() => fileInputRef.current?.click()}
             className="px-3 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            title="Attach files (PDF, TXT)"
+            title="Attach files (PDF, TXT) or drag & drop"
             disabled={isLoading}
           >
             <Paperclip size={20} className="text-gray-600" />
@@ -769,7 +860,7 @@ What research idea would you like to explore today?`,
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-            placeholder="Ask about your research idea, request paper analysis, or ask me to find gaps..."
+            placeholder="Ask about your research, upload files, or drag & drop documents..."
             className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isLoading}
           />
