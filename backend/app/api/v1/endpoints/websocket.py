@@ -4,7 +4,7 @@ WebSocket endpoints for real-time communication
 import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, status
 from app.services.websocket_service import connection_manager
-from app.api.v1.endpoints.auth import get_current_user_ws
+from app.api.v1.endpoints.auth import get_current_user_ws, get_current_user
 from app.database.session import get_db
 from app.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
