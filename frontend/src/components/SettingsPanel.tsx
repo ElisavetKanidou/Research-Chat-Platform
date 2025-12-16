@@ -4,6 +4,7 @@ import { User, Bell, Database, Shield, Palette, Save, Eye, EyeOff, Loader } from
 import { useGlobalContext } from '../contexts/GlobalContext';
 import { userService } from '../services/userService';
 import { authService } from '../services/authService';
+import { integrationService } from '../services/integrationService';
 
 interface UserSettings {
   personalInfo: {
@@ -679,6 +680,203 @@ const SettingsPanel: React.FC = () => {
     </div>
   );
 
+  // Handle integration toggle with OAuth flow
+  const handleIntegrationToggle = async (integration: string, currentValue: boolean) => {
+    try {
+      console.log(`🔌 [Integration] ${integration} - ${currentValue ? 'Disconnecting' : 'Connecting'}...`);
+
+      if (!currentValue) {
+        // CONNECTING - Initiate OAuth flow or API connection
+        switch (integration) {
+          case 'googleDrive':
+            await initiateGoogleDriveOAuth();
+            break;
+          case 'dropbox':
+            await initiateDropboxOAuth();
+            break;
+          case 'zotero':
+            await initiateZoteroConnection();
+            break;
+          case 'mendeley':
+            await initiateMendeleyOAuth();
+            break;
+          case 'latex':
+            // LaTeX doesn't need OAuth, just enable it
+            await toggleIntegrationState(integration, true);
+            break;
+        }
+      } else {
+        // DISCONNECTING - Call disconnect endpoint
+        switch (integration) {
+          case 'googleDrive':
+            await integrationService.disconnectGoogleDrive();
+            break;
+          case 'dropbox':
+            await integrationService.disconnectDropbox();
+            break;
+          case 'zotero':
+            await integrationService.disconnectZotero();
+            break;
+          case 'mendeley':
+            await integrationService.disconnectMendeley();
+            break;
+          case 'latex':
+            // LaTeX doesn't need disconnect endpoint
+            break;
+        }
+
+        // Update local state
+        await toggleIntegrationState(integration, false);
+      }
+    } catch (error) {
+      console.error(`❌ Failed to toggle ${integration}:`, error);
+      addNotification({
+        type: 'error',
+        title: 'Integration Error',
+        message: `Failed to ${currentValue ? 'disconnect' : 'connect'} ${integration}`,
+      });
+    }
+  };
+
+  // Toggle integration state and save to backend
+  const toggleIntegrationState = async (integration: string, newValue: boolean) => {
+    try {
+      // Update local state
+      setLocalSettings(prev => ({
+        ...prev,
+        integrations: { ...prev.integrations, [integration]: newValue }
+      }));
+
+      // Save to backend immediately
+      const preferencesPayload = {
+        integrations: {
+          ...localSettings.integrations,
+          [integration]: newValue
+        }
+      };
+
+      await userService.updatePreferences(preferencesPayload);
+
+      addNotification({
+        type: 'success',
+        title: 'Integration Updated',
+        message: `${integration} has been ${newValue ? 'connected' : 'disconnected'}`,
+      });
+
+      console.log(`✅ [Integration] ${integration} ${newValue ? 'connected' : 'disconnected'}`);
+    } catch (error) {
+      console.error(`❌ Failed to save ${integration} state:`, error);
+      throw error;
+    }
+  };
+
+  // OAuth Flows
+  const initiateGoogleDriveOAuth = async () => {
+    try {
+      console.log('🔐 Initiating Google Drive OAuth...');
+
+      // Get OAuth URL from backend
+      const authUrl = await integrationService.getGoogleDriveAuthUrl();
+
+      // Open OAuth popup or redirect
+      window.open(authUrl, 'Google Drive OAuth', 'width=600,height=700');
+
+      // Note: The callback will be handled by a separate route
+      addNotification({
+        type: 'info',
+        title: 'OAuth Started',
+        message: 'Please complete the authorization in the popup window',
+      });
+    } catch (error: any) {
+      console.error('❌ Google Drive OAuth failed:', error);
+      addNotification({
+        type: 'error',
+        title: 'OAuth Failed',
+        message: error.response?.data?.detail || 'Failed to start Google Drive authorization',
+      });
+    }
+  };
+
+  const initiateDropboxOAuth = async () => {
+    try {
+      console.log('🔐 Initiating Dropbox OAuth...');
+
+      const authUrl = await integrationService.getDropboxAuthUrl();
+      window.open(authUrl, 'Dropbox OAuth', 'width=600,height=700');
+
+      addNotification({
+        type: 'info',
+        title: 'OAuth Started',
+        message: 'Please complete the authorization in the popup window',
+      });
+    } catch (error: any) {
+      console.error('❌ Dropbox OAuth failed:', error);
+      addNotification({
+        type: 'error',
+        title: 'OAuth Failed',
+        message: error.response?.data?.detail || 'Failed to start Dropbox authorization',
+      });
+    }
+  };
+
+  const initiateZoteroConnection = async () => {
+    try {
+      console.log('🔐 Initiating Zotero connection...');
+
+      // Prompt for API key
+      const apiKey = window.prompt(
+        'Enter your Zotero API key:\n\n' +
+        'You can get your API key from:\n' +
+        'https://www.zotero.org/settings/keys/new'
+      );
+
+      if (!apiKey) {
+        return; // User cancelled
+      }
+
+      // Connect with API key
+      await integrationService.connectZotero(apiKey);
+
+      // Update state
+      await toggleIntegrationState('zotero', true);
+
+      addNotification({
+        type: 'success',
+        title: 'Zotero Connected',
+        message: 'Your Zotero account has been connected successfully',
+      });
+    } catch (error: any) {
+      console.error('❌ Zotero connection failed:', error);
+      addNotification({
+        type: 'error',
+        title: 'Connection Failed',
+        message: error.response?.data?.detail || 'Failed to connect Zotero',
+      });
+    }
+  };
+
+  const initiateMendeleyOAuth = async () => {
+    try {
+      console.log('🔐 Initiating Mendeley OAuth...');
+
+      const authUrl = await integrationService.getMendeleyAuthUrl();
+      window.open(authUrl, 'Mendeley OAuth', 'width=600,height=700');
+
+      addNotification({
+        type: 'info',
+        title: 'OAuth Started',
+        message: 'Please complete the authorization in the popup window',
+      });
+    } catch (error: any) {
+      console.error('❌ Mendeley OAuth failed:', error);
+      addNotification({
+        type: 'error',
+        title: 'OAuth Failed',
+        message: error.response?.data?.detail || 'Failed to start Mendeley authorization',
+      });
+    }
+  };
+
   const IntegrationsTab = () => (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg shadow-sm border">
@@ -707,10 +905,7 @@ const SettingsPanel: React.FC = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => setLocalSettings(prev => ({
-                    ...prev,
-                    integrations: { ...prev.integrations, [key]: !value }
-                  }))}
+                  onClick={() => handleIntegrationToggle(key, value)}
                   className={`px-4 py-2 rounded-lg font-medium ${
                     value
                       ? 'bg-red-100 text-red-700 hover:bg-red-200'

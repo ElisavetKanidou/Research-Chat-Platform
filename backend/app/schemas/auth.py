@@ -34,41 +34,28 @@ class RegisterRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     user: Any  # Will be UserResponse, but use Any to avoid circular import
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int
+    access_token: str = Field(..., serialization_alias='accessToken')
+    refresh_token: str = Field(..., serialization_alias='refreshToken')
+    token_type: str = Field(default="bearer", serialization_alias='tokenType')
+    expires_in: int = Field(..., serialization_alias='expiresIn')
 
     class Config:
         populate_by_name = True
-        fields = {
-            'access_token': 'accessToken',
-            'refresh_token': 'refreshToken',
-            'token_type': 'tokenType',
-            'expires_in': 'expiresIn'
-        }
 
 
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str = Field(..., alias='refreshToken')
 
     class Config:
         populate_by_name = True
-        fields = {
-            'refresh_token': 'refreshToken'
-        }
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str = Field(..., min_length=8)
-    new_password: str = Field(..., min_length=8)
+    current_password: str = Field(..., min_length=8, alias='currentPassword')
+    new_password: str = Field(..., min_length=8, alias='newPassword')
 
     class Config:
         populate_by_name = True
-        fields = {
-            'current_password': 'currentPassword',
-            'new_password': 'newPassword'
-        }
 
 
 class ResetPasswordRequest(BaseModel):
@@ -80,26 +67,17 @@ class ResetPasswordRequest(BaseModel):
 
 class ResetPasswordConfirmRequest(BaseModel):
     token: str
-    new_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=8, alias='newPassword')
 
     class Config:
         populate_by_name = True
-        fields = {
-            'new_password': 'newPassword'
-        }
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int
+    access_token: str = Field(..., serialization_alias='accessToken')
+    refresh_token: str = Field(..., serialization_alias='refreshToken')
+    token_type: str = Field(default="bearer", serialization_alias='tokenType')
+    expires_in: int = Field(..., serialization_alias='expiresIn')
 
     class Config:
         populate_by_name = True
-        fields = {
-            'access_token': 'accessToken',
-            'refresh_token': 'refreshToken',
-            'token_type': 'tokenType',
-            'expires_in': 'expiresIn'
-        }

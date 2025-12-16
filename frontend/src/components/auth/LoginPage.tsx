@@ -6,8 +6,11 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -16,23 +19,46 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setError('');
     setLoading(true);
 
-    console.log('🔍 [LoginPage] Form submitted');
-    console.log('🔍 [LoginPage] Email:', email);
+    // Validation for signup mode
+    if (mode === 'signup') {
+      if (!name.trim()) {
+        setError('Name is required');
+        setLoading(false);
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError('Passwords do not match');
+        setLoading(false);
+        return;
+      }
+
+      if (password.length < 8) {
+        setError('Password must be at least 8 characters long');
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
-      console.log('🔍 [LoginPage] Calling authService.login...');
-      
-      const result = await authService.login({ email, password });
-      
-      console.log('🔍 [LoginPage] Login successful!', result);
-      console.log('🔍 [LoginPage] Checking localStorage...');
-      console.log('🔍 [LoginPage] Token:', localStorage.getItem('auth_token'));
-      console.log('🔍 [LoginPage] User data:', localStorage.getItem('user_data'));
-      
-      onLoginSuccess();
+      if (mode === 'login') {
+        console.log('🔍 [LoginPage] Calling authService.login...');
+        const result = await authService.login({ email, password });
+        console.log('🔍 [LoginPage] Login successful!', result);
+        onLoginSuccess();
+      } else {
+        console.log('🔍 [LoginPage] Calling authService.register...');
+        const result = await authService.register({
+          name,
+          email,
+          password,
+        });
+        console.log('🔍 [LoginPage] Registration successful!', result);
+        onLoginSuccess();
+      }
     } catch (err: any) {
-      console.error('❌ [LoginPage] Login error:', err);
-      setError(err.message || 'Login failed. Please check your credentials.');
+      console.error(`❌ [LoginPage] ${mode === 'login' ? 'Login' : 'Registration'} error:`, err);
+      setError(err.message || `${mode === 'login' ? 'Login' : 'Registration'} failed. Please try again.`);
     } finally {
       setLoading(false);
     }
@@ -46,7 +72,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             Research Platform
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Sign in to your account
+            {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
           </p>
         </div>
 
@@ -58,6 +84,23 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           )}
 
           <div className="space-y-4">
+            {mode === 'signup' && (
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                  Full Name
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="John Doe"
+                />
+              </div>
+            )}
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email
@@ -84,8 +127,26 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder={mode === 'signup' ? 'At least 8 characters' : ''}
               />
             </div>
+
+            {mode === 'signup' && (
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                  Confirm Password
+                </label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Re-enter your password"
+                />
+              </div>
+            )}
           </div>
 
           <button
@@ -93,8 +154,29 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             disabled={loading}
             className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
           >
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading
+              ? (mode === 'login' ? 'Signing in...' : 'Creating account...')
+              : (mode === 'login' ? 'Sign in' : 'Sign up')
+            }
           </button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === 'login' ? 'signup' : 'login');
+                setError('');
+                setName('');
+                setConfirmPassword('');
+              }}
+              className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+            >
+              {mode === 'login'
+                ? "Don't have an account? Sign up"
+                : 'Already have an account? Sign in'
+              }
+            </button>
+          </div>
         </form>
       </div>
     </div>

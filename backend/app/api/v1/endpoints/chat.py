@@ -28,6 +28,7 @@ from app.database.session import get_db
 from app.models.user import User
 from app.models.paper import Paper
 from app.models.chat import ChatMessage
+from app.models.reference_paper import ReferencePaper
 from app.schemas.chat import (
     ChatMessageRequest, ChatMessageResponse, ChatHistoryResponse,
     PersonalizationSettingsUpdate, AddToSectionRequest, AddToSectionResponse,
@@ -37,6 +38,7 @@ from app.services.ai_service import ai_service
 from app.services.paper_service import paper_service
 from app.services.section_content_service import section_content_service
 from app.services.gemini_service import gemini_service
+from app.services.openai_service import openai_service
 from app.services.file_comparison_service import file_comparison_service
 from app.core.exceptions import (
     NotFoundException, ValidationException,
@@ -47,6 +49,48 @@ from app.core.exceptions import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ==================== HELPER FUNCTIONS ====================
+
+async def get_user_reference_papers(db: AsyncSession, user_id: UUID) -> List[Dict]:
+    """
+    Fetch user's reference papers for AI personalization
+
+    Args:
+        db: Database session
+        user_id: User ID
+
+    Returns:
+        List of reference papers with their writing style features
+    """
+    try:
+        query = select(ReferencePaper).where(
+            ReferencePaper.user_id == user_id,
+            ReferencePaper.is_analyzed == True  # Only analyzed papers
+        ).order_by(ReferencePaper.created_at.desc()).limit(10)  # Top 10 most recent
+
+        result = await db.execute(query)
+        papers = result.scalars().all()
+
+        # Convert to dict format
+        papers_list = []
+        for paper in papers:
+            papers_list.append({
+                'id': str(paper.id),
+                'title': paper.title,
+                'paper_type': paper.paper_type.value if paper.paper_type else 'personal',
+                'writing_style_features': paper.writing_style_features or {},
+                'authors': paper.authors,
+                'year': paper.year
+            })
+
+        logger.info(f"📚 Fetched {len(papers_list)} reference papers for user {user_id}")
+        return papers_list
+
+    except Exception as e:
+        logger.error(f"❌ Failed to fetch reference papers: {str(e)}")
+        return []
 
 
 # ==================== FILE PROCESSING UTILITIES ====================
@@ -140,7 +184,7 @@ async def send_chat_message(
         HTTPException: 401 if unauthorized, 403 if forbidden, 502 if AI service fails
     """
 
-    logger.info(f"Chat message from user {current_user.id}: {message_request.content[:50]}...")
+    logger.info(f"Chat message from user {current_user.id}: {message_request.content[:50]}... (model: {message_request.model})")
 
     try:
         # Validate and get paper context if provided
@@ -158,15 +202,142 @@ async def send_chat_message(
 
             logger.debug(f"Paper context: {paper.title}")
 
-        # Process the chat message through AI service
-        ai_response = await ai_service.process_chat_message(
-            user=current_user,
-            message=message_request.content,
-            paper_context=paper,
-            user_papers_context=message_request.user_papers_context,
-            personalization_settings=message_request.personalization_settings,
-            db=db
-        )
+        # Route to appropriate AI service based on selected model
+        ai_response = None
+
+        if message_request.model == 'gemini':
+            # User selected Gemini
+            if gemini_service.enabled:
+                logger.info("🤖 Using Gemini AI (user selected)")
+                try:
+                    # Prepare paper context for Gemini
+                    paper_ctx = None
+                    if paper:
+                        paper_ctx = {
+                            'title': paper.title,
+                            'research_area': paper.research_area or '',
+                            'status': paper.status.value if hasattr(paper.status, 'value') else str(paper.status),
+                            'progress': paper.progress,
+                            'current_word_count': paper.current_word_count,
+                            'target_word_count': paper.target_word_count,
+                        }
+
+                    # Fetch user's reference papers for style analysis
+                    reference_papers = await get_user_reference_papers(db, current_user.id)
+
+                    # Generate response with Gemini
+                    gemini_response = await gemini_service.generate_response(
+                        message=message_request.content,
+                        files_content=[],
+                        personalization=message_request.personalization_settings.dict() if message_request.personalization_settings else None,
+                        paper_context=paper_ctx,
+                        reference_papers=reference_papers
+                    )
+
+                    # Create response wrapper
+                    class GeminiResponseWrapper:
+                        def __init__(self, gemini_data):
+                            self.messageId = f"gemini-{current_user.id}-{int(time.time())}"
+                            self.responseContent = gemini_data['content']
+                            self.createdAt = datetime.now().isoformat()
+                            self.needsConfirmation = False
+                            self.attachments = []
+                            self.suggestions = gemini_data.get('citations', [])
+                            self.metadata = gemini_data.get('metadata', {})
+
+                    ai_response = GeminiResponseWrapper(gemini_response)
+
+                except Exception as e:
+                    logger.warning(f"⚠️ Gemini failed, falling back to Groq: {str(e)}")
+                    ai_response = None
+            else:
+                logger.warning("⚠️ Gemini selected but not enabled, falling back to Groq")
+
+        # Route to appropriate service based on model selection
+        if ai_response is None:
+            if message_request.model == 'groq':
+                # User explicitly selected Groq
+                logger.info("🤖 Using Groq/Llama (user selected)")
+                ai_response = await ai_service.process_chat_message(
+                    user=current_user,
+                    message=message_request.content,
+                    paper_context=paper,
+                    user_papers_context=message_request.user_papers_context,
+                    personalization_settings=message_request.personalization_settings,
+                    db=db
+                )
+            elif message_request.model in ['gpt-3.5', 'gpt-4']:
+                # User selected OpenAI models
+                openai_model = 'gpt-3.5-turbo' if message_request.model == 'gpt-3.5' else 'gpt-4'
+
+                if openai_service.enabled:
+                    logger.info(f"🤖 Using OpenAI {openai_model} (user selected)")
+                    try:
+                        # Prepare paper context for OpenAI
+                        paper_ctx = None
+                        if paper:
+                            paper_ctx = {
+                                'title': paper.title,
+                                'research_area': paper.research_area or '',
+                                'status': paper.status.value if hasattr(paper.status, 'value') else str(paper.status),
+                                'progress': paper.progress,
+                                'current_word_count': paper.current_word_count,
+                                'target_word_count': paper.target_word_count,
+                            }
+
+                        # Generate response with OpenAI
+                        openai_response = await openai_service.generate_response(
+                            message=message_request.content,
+                            files_content=[],
+                            personalization=message_request.personalization_settings.dict() if message_request.personalization_settings else None,
+                            paper_context=paper_ctx,
+                            model=openai_model
+                        )
+
+                        # Create response wrapper
+                        class OpenAIResponseWrapper:
+                            def __init__(self, openai_data):
+                                self.messageId = f"openai-{current_user.id}-{int(time.time())}"
+                                self.responseContent = openai_data['content']
+                                self.createdAt = datetime.now().isoformat()
+                                self.needsConfirmation = False
+                                self.attachments = []
+                                self.suggestions = openai_data.get('citations', [])
+                                self.metadata = openai_data.get('metadata', {})
+
+                        ai_response = OpenAIResponseWrapper(openai_response)
+
+                    except Exception as e:
+                        logger.warning(f"⚠️ OpenAI failed, falling back to Groq: {str(e)}")
+                        ai_response = await ai_service.process_chat_message(
+                            user=current_user,
+                            message=message_request.content,
+                            paper_context=paper,
+                            user_papers_context=message_request.user_papers_context,
+                            personalization_settings=message_request.personalization_settings,
+                            db=db
+                        )
+                else:
+                    logger.warning("⚠️ OpenAI selected but not enabled, falling back to Groq")
+                    ai_response = await ai_service.process_chat_message(
+                        user=current_user,
+                        message=message_request.content,
+                        paper_context=paper,
+                        user_papers_context=message_request.user_papers_context,
+                        personalization_settings=message_request.personalization_settings,
+                        db=db
+                    )
+            else:
+                # Default fallback to Groq
+                logger.info(f"🤖 Using Groq/Llama (fallback for model: {message_request.model})")
+                ai_response = await ai_service.process_chat_message(
+                    user=current_user,
+                    message=message_request.content,
+                    paper_context=paper,
+                    user_papers_context=message_request.user_papers_context,
+                    personalization_settings=message_request.personalization_settings,
+                    db=db
+                )
 
         # Save conversation to database in background (non-blocking)
         background_tasks.add_task(
@@ -221,6 +392,7 @@ async def send_chat_message_with_files(
     files: List[UploadFile] = File(...),
     paper_context: Optional[str] = Form(None),
     personalization_settings: Optional[str] = Form(None),
+    model: str = Form('gemini'),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -318,55 +490,74 @@ async def send_chat_message_with_files(
             comparisons = file_comparison_service.compare_multiple_files(file_contents)
             comparison_summary = file_comparison_service.generate_comparison_summary(comparisons)
 
-        # Try using Gemini first (FREE and better for research), fallback to OpenAI
-        try:
+        # Route to appropriate AI service based on selected model
+        logger.info(f"📤 Processing with model: {model}")
+
+        ai_response = None
+
+        # Try using Gemini if user selected it
+        if model == 'gemini':
             if gemini_service.enabled:
-                logger.info("🤖 Using Gemini AI for response generation")
+                try:
+                    logger.info("🤖 Using Gemini AI for response generation (user selected)")
 
-                # Prepare paper context for Gemini
-                paper_ctx = None
-                if paper:
-                    paper_ctx = {
-                        'title': paper.title,
-                        'research_area': paper.research_area or '',
-                        'status': paper.status.value if hasattr(paper.status, 'value') else str(paper.status),
-                        'progress': paper.progress,
-                        'current_word_count': paper.current_word_count,
-                        'target_word_count': paper.target_word_count,
-                    }
+                    # Prepare paper context for Gemini
+                    paper_ctx = None
+                    if paper:
+                        paper_ctx = {
+                            'title': paper.title,
+                            'research_area': paper.research_area or '',
+                            'status': paper.status.value if hasattr(paper.status, 'value') else str(paper.status),
+                            'progress': paper.progress,
+                            'current_word_count': paper.current_word_count,
+                            'target_word_count': paper.target_word_count,
+                        }
 
-                # Add comparison summary to user message
-                user_message_with_comparison = content if content else "I've uploaded files for analysis."
-                if comparison_summary:
-                    user_message_with_comparison += f"\n\n{comparison_summary}"
+                    # Add comparison summary to user message
+                    user_message_with_comparison = content if content else "I've uploaded files for analysis."
+                    if comparison_summary:
+                        user_message_with_comparison += f"\n\n{comparison_summary}"
 
-                # Generate response with Gemini
-                gemini_response = await gemini_service.generate_response(
-                    message=user_message_with_comparison,
-                    files_content=file_contents,
-                    personalization=personalization,
-                    paper_context=paper_ctx
-                )
+                    # Fetch user's reference papers for style analysis
+                    reference_papers = await get_user_reference_papers(db, current_user.id)
 
-                # Create response object
-                class GeminiResponseWrapper:
-                    def __init__(self, gemini_data):
-                        self.messageId = f"gemini-{current_user.id}-{int(time.time())}"
-                        self.responseContent = gemini_data['content']
-                        self.createdAt = datetime.now().isoformat()
-                        self.needsConfirmation = False
-                        self.attachments = []
-                        self.suggestions = gemini_data.get('citations', [])
-                        self.metadata = gemini_data.get('metadata', {})
-                        self.metadata['model'] = 'gemini-1.5-flash'
-                        if comparison_summary:
-                            self.metadata['file_comparison'] = comparison_summary
+                    # Generate response with Gemini
+                    gemini_response = await gemini_service.generate_response(
+                        message=user_message_with_comparison,
+                        files_content=file_contents,
+                        personalization=personalization,
+                        paper_context=paper_ctx,
+                        reference_papers=reference_papers
+                    )
 
-                ai_response = GeminiResponseWrapper(gemini_response)
+                    # Create response object
+                    class GeminiResponseWrapper:
+                        def __init__(self, gemini_data):
+                            self.messageId = f"gemini-{current_user.id}-{int(time.time())}"
+                            self.responseContent = gemini_data['content']
+                            self.createdAt = datetime.now().isoformat()
+                            self.needsConfirmation = False
+                            self.attachments = []
+                            self.suggestions = gemini_data.get('citations', [])
+                            self.metadata = gemini_data.get('metadata', {})
+                            self.metadata['model'] = 'gemini-1.5-flash'
+                            if comparison_summary:
+                                self.metadata['file_comparison'] = comparison_summary
+
+                    ai_response = GeminiResponseWrapper(gemini_response)
+
+                except Exception as e:
+                    logger.warning(f"⚠️ Gemini failed, falling back to Groq: {str(e)}")
+                    ai_response = None
 
             else:
-                # Fallback to OpenAI
-                logger.info("🤖 Gemini not available, using OpenAI")
+                logger.warning("⚠️ Gemini selected but not enabled, falling back to Groq")
+
+        # Route to appropriate service based on model selection
+        if ai_response is None:
+            if model == 'groq':
+                # User explicitly selected Groq
+                logger.info("🤖 Using Groq/Llama for file upload (user selected)")
 
                 enhanced_content = content if content else "I've uploaded some files for you to analyze."
                 enhanced_content += "\n\n--- Uploaded Files ---\n"
@@ -389,30 +580,124 @@ async def send_chat_message_with_files(
                     db=db
                 )
 
-        except Exception as gemini_error:
-            logger.warning(f"⚠️ Gemini failed, falling back to OpenAI: {str(gemini_error)}")
+            elif model in ['gpt-3.5', 'gpt-4']:
+                # User selected OpenAI models
+                openai_model = 'gpt-3.5-turbo' if model == 'gpt-3.5' else 'gpt-4'
 
-            # Fallback to OpenAI
-            enhanced_content = content if content else "I've uploaded some files for you to analyze."
-            enhanced_content += "\n\n--- Uploaded Files ---\n"
+                if openai_service.enabled:
+                    logger.info(f"🤖 Using OpenAI {openai_model} for file upload (user selected)")
+                    try:
+                        # Prepare paper context for OpenAI
+                        paper_ctx = None
+                        if paper:
+                            paper_ctx = {
+                                'title': paper.title,
+                                'research_area': paper.research_area or '',
+                                'status': paper.status.value if hasattr(paper.status, 'value') else str(paper.status),
+                                'progress': paper.progress,
+                                'current_word_count': paper.current_word_count,
+                                'target_word_count': paper.target_word_count,
+                            }
 
-            for file_info in file_contents:
-                enhanced_content += f"\n**File: {file_info['filename']}** ({file_info['size'] / 1024:.1f} KB)\n"
-                enhanced_content += f"Content:\n{file_info['content'][:5000]}\n"
-                if len(file_info['content']) > 5000:
-                    enhanced_content += f"... (truncated, total length: {len(file_info['content'])} characters)\n"
+                        # Add comparison summary to user message
+                        user_message_with_comparison = content if content else "I've uploaded files for analysis."
+                        if comparison_summary:
+                            user_message_with_comparison += f"\n\n{comparison_summary}"
 
-            if comparison_summary:
-                enhanced_content += f"\n\n{comparison_summary}"
+                        # Generate response with OpenAI
+                        openai_response = await openai_service.generate_response(
+                            message=user_message_with_comparison,
+                            files_content=file_contents,
+                            personalization=personalization,
+                            paper_context=paper_ctx,
+                            model=openai_model
+                        )
 
-            ai_response = await ai_service.process_chat_message(
-                user=current_user,
-                message=enhanced_content,
-                paper_context=paper,
-                user_papers_context=None,
-                personalization_settings=personalization,
-                db=db
-            )
+                        # Create response object
+                        class OpenAIResponseWrapper:
+                            def __init__(self, openai_data):
+                                self.messageId = f"openai-{current_user.id}-{int(time.time())}"
+                                self.responseContent = openai_data['content']
+                                self.createdAt = datetime.now().isoformat()
+                                self.needsConfirmation = False
+                                self.attachments = []
+                                self.suggestions = openai_data.get('citations', [])
+                                self.metadata = openai_data.get('metadata', {})
+                                if comparison_summary:
+                                    self.metadata['file_comparison'] = comparison_summary
+
+                        ai_response = OpenAIResponseWrapper(openai_response)
+
+                    except Exception as e:
+                        logger.warning(f"⚠️ OpenAI failed, falling back to Groq: {str(e)}")
+                        # Fallback to Groq
+                        enhanced_content = content if content else "I've uploaded some files for you to analyze."
+                        enhanced_content += "\n\n--- Uploaded Files ---\n"
+
+                        for file_info in file_contents:
+                            enhanced_content += f"\n**File: {file_info['filename']}** ({file_info['size'] / 1024:.1f} KB)\n"
+                            enhanced_content += f"Content:\n{file_info['content'][:5000]}\n"
+                            if len(file_info['content']) > 5000:
+                                enhanced_content += f"... (truncated, total length: {len(file_info['content'])} characters)\n"
+
+                        if comparison_summary:
+                            enhanced_content += f"\n\n{comparison_summary}"
+
+                        ai_response = await ai_service.process_chat_message(
+                            user=current_user,
+                            message=enhanced_content,
+                            paper_context=paper,
+                            user_papers_context=None,
+                            personalization_settings=personalization,
+                            db=db
+                        )
+                else:
+                    logger.warning("⚠️ OpenAI selected but not enabled, falling back to Groq")
+                    # Fallback to Groq
+                    enhanced_content = content if content else "I've uploaded some files for you to analyze."
+                    enhanced_content += "\n\n--- Uploaded Files ---\n"
+
+                    for file_info in file_contents:
+                        enhanced_content += f"\n**File: {file_info['filename']}** ({file_info['size'] / 1024:.1f} KB)\n"
+                        enhanced_content += f"Content:\n{file_info['content'][:5000]}\n"
+                        if len(file_info['content']) > 5000:
+                            enhanced_content += f"... (truncated, total length: {len(file_info['content'])} characters)\n"
+
+                    if comparison_summary:
+                        enhanced_content += f"\n\n{comparison_summary}"
+
+                    ai_response = await ai_service.process_chat_message(
+                        user=current_user,
+                        message=enhanced_content,
+                        paper_context=paper,
+                        user_papers_context=None,
+                        personalization_settings=personalization,
+                        db=db
+                    )
+            else:
+                # Default fallback to Groq
+                logger.info(f"🤖 Using Groq/Llama (fallback for model: {model})")
+
+                enhanced_content = content if content else "I've uploaded some files for you to analyze."
+                enhanced_content += "\n\n--- Uploaded Files ---\n"
+
+                for file_info in file_contents:
+                    enhanced_content += f"\n**File: {file_info['filename']}** ({file_info['size'] / 1024:.1f} KB)\n"
+                    enhanced_content += f"Content:\n{file_info['content'][:5000]}\n"
+                    if len(file_info['content']) > 5000:
+                        enhanced_content += f"... (truncated, total length: {len(file_info['content'])} characters)\n"
+
+                if comparison_summary:
+                    enhanced_content += f"\n\n{comparison_summary}"
+
+                ai_response = await ai_service.process_chat_message(
+                    user=current_user,
+                    message=enhanced_content,
+                    paper_context=paper,
+                    user_papers_context=None,
+                    personalization_settings=personalization,
+                    db=db
+                )
 
         # Save conversation to database in background
         background_tasks.add_task(

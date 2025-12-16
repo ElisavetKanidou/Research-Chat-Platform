@@ -4,17 +4,19 @@ import { useGlobalContext } from '../contexts/GlobalContext';
 import type { Paper } from '../types/paper';
 
 // ADDED: Imports for all used icons
-import { 
-  FileText, 
-  MoreVertical, 
-  Edit, 
-  Copy, 
-  Archive, 
-  Trash2, 
-  Clock, 
-  Users, 
-  Plus, 
-  Search 
+import {
+  FileText,
+  MoreVertical,
+  Edit,
+  Copy,
+  Archive,
+  Trash2,
+  Clock,
+  Users,
+  Plus,
+  Search,
+  CheckCircle,
+  Calendar
 } from 'lucide-react';
 
 interface PapersManagementProps {
@@ -33,6 +35,24 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [sortBy, setSortBy] = useState<SortBy>('lastModified');
   const [showDropdown, setShowDropdown] = useState<string | null>(null);
+  const [showDeadlineModal, setShowDeadlineModal] = useState<string | null>(null);
+  const [deadlineDate, setDeadlineDate] = useState<string>('');
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  const toggleDropdown = (paperId: string) => {
+    // Save current scroll position
+    const scrollPos = scrollContainerRef.current?.scrollTop || 0;
+
+    // Toggle dropdown
+    setShowDropdown(showDropdown === paperId ? null : paperId);
+
+    // Restore scroll position after state update
+    setTimeout(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollPos;
+      }
+    }, 0);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -122,6 +142,38 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
     setShowDropdown(null);
   };
 
+  const handleMarkAsPublished = (paperId: string) => {
+    updatePaper(paperId, { status: 'published' });
+    setShowDropdown(null);
+  };
+
+  const handleOpenDeadlineModal = (paperId: string, currentDeadline?: Date) => {
+    setShowDeadlineModal(paperId);
+    if (currentDeadline) {
+      // Format date for input type="datetime-local"
+      const date = new Date(currentDeadline);
+      const formatted = date.toISOString().slice(0, 16);
+      setDeadlineDate(formatted);
+    } else {
+      setDeadlineDate('');
+    }
+    setShowDropdown(null);
+  };
+
+  const handleSetDeadline = () => {
+    if (showDeadlineModal && deadlineDate) {
+      updatePaper(showDeadlineModal, { deadline: new Date(deadlineDate) });
+    }
+    setShowDeadlineModal(null);
+    setDeadlineDate('');
+  };
+
+  const handleRemoveDeadline = (paperId: string) => {
+    updatePaper(paperId, { deadline: undefined });
+    setShowDeadlineModal(null);
+    setDeadlineDate('');
+  };
+
   const handleDeletePaper = (paperId: string) => {
     if (window.confirm('Are you sure you want to delete this paper? This action cannot be undone.')) {
       deletePaper(paperId);
@@ -151,29 +203,56 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
           </div>
           <div className="relative">
             <button
-              onClick={(e) => { e.stopPropagation(); setShowDropdown(showDropdown === paper.id ? null : paper.id); }}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleDropdown(paper.id);
+              }}
               className="p-1 hover:bg-gray-100 rounded-full"
             >
               <MoreVertical size={16} className="text-gray-400" />
             </button>
             {showDropdown === paper.id && (
-              <div className="absolute right-0 top-8 bg-white border rounded-lg shadow-lg py-2 w-48 z-10" onClick={e => e.stopPropagation()}>
+              <div className="absolute right-0 top-8 bg-white border rounded-lg shadow-lg py-2 w-48 z-10" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                 <button
-                  onClick={() => onPaperSelect(paper)}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); onPaperSelect(paper); }}
                   className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
                 >
                   <Edit size={14} />
                   Edit Paper
                 </button>
                 <button
-                  onClick={() => handleDuplicatePaper(paper)}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); handleDuplicatePaper(paper); }}
                   className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
                 >
                   <Copy size={14} />
                   Duplicate
                 </button>
+                {paper.status !== 'published' && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); handleMarkAsPublished(paper.id); }}
+                    className="w-full px-4 py-2 text-left hover:bg-green-50 text-green-700 flex items-center gap-2"
+                  >
+                    <CheckCircle size={14} />
+                    Mark as Published
+                  </button>
+                )}
                 <button
-                  onClick={() => handleArchivePaper(paper.id)}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); handleOpenDeadlineModal(paper.id, paper.deadline); }}
+                  className="w-full px-4 py-2 text-left hover:bg-blue-50 text-blue-700 flex items-center gap-2"
+                >
+                  <Calendar size={14} />
+                  {paper.deadline ? 'Update Deadline' : 'Set Deadline'}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); handleArchivePaper(paper.id); }}
                   className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
                 >
                   <Archive size={14} />
@@ -181,7 +260,8 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
                 </button>
                 <hr className="my-2" />
                 <button
-                  onClick={() => handleDeletePaper(paper.id)}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); handleDeletePaper(paper.id); }}
                   className="w-full px-4 py-2 text-left hover:bg-red-50 text-red-600 flex items-center gap-2"
                 >
                   <Trash2 size={14} />
@@ -221,6 +301,21 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
               <span>{((paper as any).co_authors || []).length} collaborator{((paper as any).co_authors || []).length > 1 ? 's' : ''}</span>
             </div>
           )}
+
+          {paper.deadline && (
+            <div className="flex items-center gap-2">
+              <Calendar size={14} className="text-orange-600" />
+              <span className="text-orange-600 font-medium">
+                Due {new Date(paper.deadline).toLocaleDateString('en-US', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </span>
+            </div>
+          )}
         </div>
         <div className="mt-4 pt-4 border-t">
           <button
@@ -255,6 +350,18 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
               <span>{paper.researchArea}</span>
               <span>{((paper as any).current_word_count || 0).toLocaleString()} words</span>
               <span>Modified {formatDate((paper as any).updated_at || paper.lastModified || paper.createdAt)}</span>
+              {paper.deadline && (
+                <span className="flex items-center gap-1 text-orange-600 font-medium">
+                  <Calendar size={14} />
+                  Due {new Date(paper.deadline).toLocaleDateString('en-US', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -270,29 +377,56 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
           </div>
           <div className="relative">
             <button
-              onClick={(e) => { e.stopPropagation(); setShowDropdown(showDropdown === paper.id ? null : paper.id); }}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleDropdown(paper.id);
+              }}
               className="p-2 hover:bg-gray-100 rounded-full"
             >
               <MoreVertical size={16} className="text-gray-400" />
             </button>
             {showDropdown === paper.id && (
-              <div className="absolute right-0 top-10 bg-white border rounded-lg shadow-lg py-2 w-48 z-10" onClick={e => e.stopPropagation()}>
+              <div className="absolute right-0 top-10 bg-white border rounded-lg shadow-lg py-2 w-48 z-10" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                 <button
-                  onClick={() => onPaperSelect(paper)}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); onPaperSelect(paper); }}
                   className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
                 >
                   <Edit size={14} />
                   Edit Paper
                 </button>
                 <button
-                  onClick={() => handleDuplicatePaper(paper)}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); handleDuplicatePaper(paper); }}
                   className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
                 >
                   <Copy size={14} />
                   Duplicate
                 </button>
+                {paper.status !== 'published' && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); handleMarkAsPublished(paper.id); }}
+                    className="w-full px-4 py-2 text-left hover:bg-green-50 text-green-700 flex items-center gap-2"
+                  >
+                    <CheckCircle size={14} />
+                    Mark as Published
+                  </button>
+                )}
                 <button
-                  onClick={() => handleArchivePaper(paper.id)}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); handleOpenDeadlineModal(paper.id, paper.deadline); }}
+                  className="w-full px-4 py-2 text-left hover:bg-blue-50 text-blue-700 flex items-center gap-2"
+                >
+                  <Calendar size={14} />
+                  {paper.deadline ? 'Update Deadline' : 'Set Deadline'}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); handleArchivePaper(paper.id); }}
                   className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2"
                 >
                   <Archive size={14} />
@@ -300,7 +434,8 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
                 </button>
                 <hr className="my-2" />
                 <button
-                  onClick={() => handleDeletePaper(paper.id)}
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); handleDeletePaper(paper.id); }}
                   className="w-full px-4 py-2 text-left hover:bg-red-50 text-red-600 flex items-center gap-2"
                 >
                   <Trash2 size={14} />
@@ -316,7 +451,7 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
 
   return (
     <div className="h-full overflow-hidden flex flex-col">
-      <div className="flex-1 overflow-y-auto p-4 lg:p-6" onClick={() => setShowDropdown(null)}>
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 lg:p-6" onClick={() => setShowDropdown(null)}>
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -441,6 +576,54 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
           )}
         </div>
       </div>
+
+      {/* Deadline Modal */}
+      {showDeadlineModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowDeadlineModal(null)}>
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Calendar size={20} className="text-blue-600" />
+              Set Paper Deadline
+            </h2>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Deadline Date & Time
+              </label>
+              <input
+                type="datetime-local"
+                value={deadlineDate}
+                onChange={(e) => setDeadlineDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSetDeadline}
+                disabled={!deadlineDate}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                Set Deadline
+              </button>
+              {deadlineDate && (
+                <button
+                  onClick={() => handleRemoveDeadline(showDeadlineModal)}
+                  className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  Remove
+                </button>
+              )}
+              <button
+                onClick={() => setShowDeadlineModal(null)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

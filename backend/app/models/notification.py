@@ -15,6 +15,7 @@ class NotificationType(str, enum.Enum):
     COLLABORATION_INVITE = "collaboration_invite"
     PAPER_SHARED = "paper_shared"
     COMMENT_ADDED = "comment_added"
+    COMMENT_UPDATED = "comment_updated"  # For resolve/unresolve actions
     PAPER_UPDATED = "paper_updated"
     COLLABORATOR_ADDED = "collaborator_added"
 

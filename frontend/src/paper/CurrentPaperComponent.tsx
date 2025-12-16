@@ -6,6 +6,7 @@ import type { PaperSection } from '../types/paper';
 import { paperService } from '../services/paperService';
 import { apiClient } from '../utils/apiHelpers';
 import InviteCollaboratorsModal from '../components/modals/InviteCollaboratorsModal';
+import CommentSection from '../components/CommentSection';
 
 interface Friend {
   id: string;
@@ -657,54 +658,71 @@ const CurrentPaperComponent: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* ✅ INLINE EDITOR */}
+                      {/* ✅ INLINE EDITOR - Two Column Layout with Comments */}
                       {isEditing && (
-                        <div className="px-4 pb-4 space-y-3 border-t bg-gray-50">
-                          <div className="pt-3">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Section Content
-                            </label>
-                            <textarea
-                              value={editingSection.content}
-                              onChange={(e) => setEditingSection(prev => 
-                                prev ? { ...prev, content: e.target.value } : null
-                              )}
-                              disabled={editingSection.isSaving}
-                              className="w-full h-64 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
-                              placeholder={`Write your ${section.title.toLowerCase()} here...`}
-                            />
-                            <div className="mt-1 text-xs text-gray-500">
-                              {editingSection.content.trim().split(/\s+/).filter(Boolean).length} words
+                        <div className="px-4 pb-4 border-t bg-gray-50">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-3">
+                            {/* Left Column: Editor */}
+                            <div className="space-y-3">
+                              <label className="block text-sm font-medium text-gray-700">
+                                Section Content
+                              </label>
+                              <textarea
+                                value={editingSection.content}
+                                onChange={(e) => setEditingSection(prev =>
+                                  prev ? { ...prev, content: e.target.value } : null
+                                )}
+                                disabled={editingSection.isSaving}
+                                className="w-full h-96 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                placeholder={`Write your ${section.title.toLowerCase()} here...`}
+                              />
+                              <div className="text-xs text-gray-500">
+                                {editingSection.content.trim().split(/\s+/).filter(Boolean).length} words
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={cancelEditingSection}
+                                  disabled={editingSection.isSaving}
+                                  className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <X size={16} />
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={saveSectionContent}
+                                  disabled={editingSection.isSaving || editingSection.content === editingSection.originalContent}
+                                  className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {editingSection.isSaving ? (
+                                    <>
+                                      <Loader size={16} className="animate-spin" />
+                                      Saving...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check size={16} />
+                                      Save Changes
+                                    </>
+                                  )}
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                          
-                          {/* Action Buttons */}
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={cancelEditingSection}
-                              disabled={editingSection.isSaving}
-                              className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <X size={16} />
-                              Cancel
-                            </button>
-                            <button
-                              onClick={saveSectionContent}
-                              disabled={editingSection.isSaving || editingSection.content === editingSection.originalContent}
-                              className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {editingSection.isSaving ? (
-                                <>
-                                  <Loader size={16} className="animate-spin" />
-                                  Saving...
-                                </>
-                              ) : (
-                                <>
-                                  <Check size={16} />
-                                  Save Changes
-                                </>
-                              )}
-                            </button>
+
+                            {/* Right Column: Comments */}
+                            <div className="lg:border-l lg:pl-4">
+                              <CommentSection
+                                paperId={activePaper.id}
+                                sectionId={section.id}
+                                sectionTitle={section.title}
+                                currentUserId={activePaper.ownerId || ''}
+                                isEditMode={true}
+                                onCommentAdded={() => {
+                                  console.log('Comment added to section:', section.id);
+                                }}
+                              />
+                            </div>
                           </div>
                         </div>
                       )}
@@ -717,6 +735,22 @@ const CurrentPaperComponent: React.FC = () => {
                               {section.content || 'No content yet...'}
                             </p>
                           </div>
+                        </div>
+                      )}
+
+                      {/* Comments Section - Show only in view mode (edit mode has it in sidebar) */}
+                      {selectedSection === section.id && !isEditing && (
+                        <div className="px-4 pb-4">
+                          <CommentSection
+                            paperId={activePaper.id}
+                            sectionId={section.id}
+                            sectionTitle={section.title}
+                            currentUserId={activePaper.ownerId || ''}
+                            isEditMode={false}
+                            onCommentAdded={() => {
+                              console.log('Comment added to section:', section.id);
+                            }}
+                          />
                         </div>
                       )}
                     </div>

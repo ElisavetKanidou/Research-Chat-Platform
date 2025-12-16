@@ -32,8 +32,9 @@ export const useWebSocket = (): UseWebSocketReturn => {
   const connect = useCallback(() => {
     try {
       const token = localStorage.getItem('auth_token');
-      if (!token) {
-        console.log('⚠️ No auth token, skipping WebSocket connection');
+      // Only connect if we have a valid token
+      if (!token || token === 'null' || token === 'undefined') {
+        console.log('⚠️ No valid auth token, skipping WebSocket connection');
         return;
       }
 

@@ -79,44 +79,6 @@ class PaperVersion(BaseModel):
     created_by = relationship("User")
 
 
-class PaperComment(BaseModel):
-    """Paper comments and reviews"""
-    __tablename__ = "paper_comments"
-
-    # Comment content
-    content = Column(Text, nullable=False)
-    comment_type = Column(String(20), default="general", nullable=False)  # general, suggestion, question, approval
-
-    # Location context
-    section_id = Column(UUID(as_uuid=True), ForeignKey("paper_sections.id"), nullable=True)
-    line_number = Column(Integer, nullable=True)
-    selection_start = Column(Integer, nullable=True)
-    selection_end = Column(Integer, nullable=True)
-
-    # Status
-    is_resolved = Column(Boolean, default=False, nullable=False)
-    resolved_at = Column(DateTime, nullable=True)
-    resolved_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-
-    # Threading
-    parent_id = Column(UUID(as_uuid=True), ForeignKey("paper_comments.id"), nullable=True)
-    thread_id = Column(UUID(as_uuid=True), nullable=True)  # Root comment ID
-
-    # Relationships
-    paper_id = Column(UUID(as_uuid=True), ForeignKey("papers.id"), nullable=False)
-    paper = relationship("Paper", back_populates="comments")
-
-    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    author = relationship("User", foreign_keys=[author_id])
-
-    resolved_by = relationship("User", foreign_keys=[resolved_by_id])
-    section = relationship("PaperSection")
-
-    # Self-referencing for replies
-    parent = relationship("PaperComment", remote_side="PaperComment.id", back_populates="replies")
-    replies = relationship("PaperComment", back_populates="parent")
-
-
 class CollaborationSession(BaseModel):
     """Real-time collaboration session tracking"""
     __tablename__ = "collaboration_sessions"

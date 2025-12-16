@@ -20,7 +20,7 @@ class GeminiService:
             api_key = getattr(settings, 'GEMINI_API_KEY', None)
             if api_key:
                 genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel('gemini-1.5-flash')
+                self.model = genai.GenerativeModel('gemini-2.5-pro')
                 self.enabled = True
                 logger.info("✅ Gemini service initialized successfully")
             else:
@@ -35,7 +35,8 @@ class GeminiService:
         message: str,
         files_content: List[Dict[str, Any]],
         personalization: Optional[Dict[str, int]],
-        paper_context: Optional[Dict[str, Any]] = None
+        paper_context: Optional[Dict[str, Any]] = None,
+        reference_papers: Optional[List[Dict[str, Any]]] = None
     ) -> str:
         """
         Build a comprehensive research-focused prompt for Gemini
@@ -45,11 +46,12 @@ class GeminiService:
             files_content: List of uploaded files with content
             personalization: User's AI personalization settings
             paper_context: Current paper being worked on
+            reference_papers: Lab/personal/literature papers for style analysis
 
         Returns:
             Formatted prompt string
         """
-        # Build personalization instructions
+        # Build personalization instructions with reference papers
         style_instructions = ""
         if personalization:
             lab_level = personalization.get('lab_level', 5)
@@ -61,6 +63,46 @@ WRITING STYLE PREFERENCES:
 - Lab Research Influence: {lab_level}/10 (use terminology and style from lab papers)
 - Personal Writing Style: {personal_level}/10 (match user's personal academic writing)
 - Global Academic Standards: {global_level}/10 (follow international conventions)
+"""
+
+        # Add reference papers analysis
+        reference_papers_info = ""
+        if reference_papers:
+            lab_papers = [p for p in reference_papers if p.get('paper_type') == 'lab']
+            personal_papers = [p for p in reference_papers if p.get('paper_type') == 'personal']
+            literature_papers = [p for p in reference_papers if p.get('paper_type') == 'literature']
+
+            if lab_papers or personal_papers or literature_papers:
+                reference_papers_info = "\n\nREFERENCE PAPERS ANALYSIS:\n"
+
+                if lab_papers:
+                    reference_papers_info += f"\n📚 LAB PAPERS ({len(lab_papers)} papers):\n"
+                    for paper in lab_papers[:3]:  # Top 3
+                        reference_papers_info += f"  • {paper.get('title', 'Untitled')}\n"
+                        if paper.get('writing_style_features'):
+                            features = paper['writing_style_features']
+                            reference_papers_info += f"    Style: Avg {features.get('avg_sentence_length', 0):.1f} words/sentence, "
+                            reference_papers_info += f"{features.get('passive_voice_ratio', 0):.0%} passive voice\n"
+                            if features.get('common_phrases'):
+                                reference_papers_info += f"    Common phrases: {', '.join(features['common_phrases'][:3])}\n"
+
+                if personal_papers:
+                    reference_papers_info += f"\n✍️ PERSONAL PAPERS ({len(personal_papers)} papers):\n"
+                    for paper in personal_papers[:3]:
+                        reference_papers_info += f"  • {paper.get('title', 'Untitled')}\n"
+                        if paper.get('writing_style_features'):
+                            features = paper['writing_style_features']
+                            reference_papers_info += f"    Your style: {features.get('avg_sentence_length', 0):.1f} words/sentence, "
+                            reference_papers_info += f"complexity {features.get('vocabulary_complexity', 0):.2f}\n"
+                            if features.get('technical_terms'):
+                                reference_papers_info += f"    Your terms: {', '.join(features['technical_terms'][:3])}\n"
+
+                if literature_papers:
+                    reference_papers_info += f"\n🌐 LITERATURE PAPERS ({len(literature_papers)} papers):\n"
+                    for paper in literature_papers[:3]:
+                        reference_papers_info += f"  • {paper.get('title', 'Untitled')}\n"
+
+                reference_papers_info += "\n💡 INSTRUCTION: Adapt your responses based on these reference papers' writing styles according to the personalization levels above.\n"
 """
 
         # Build paper context
@@ -89,6 +131,7 @@ CURRENT PAPER CONTEXT:
         prompt = f"""You are an expert academic research assistant specialized in helping researchers write high-quality research papers.
 
 {style_instructions}
+{reference_papers_info}
 {paper_info}
 {files_info}
 
@@ -120,7 +163,8 @@ Provide your expert analysis:"""
         message: str,
         files_content: List[Dict[str, Any]] = None,
         personalization: Optional[Dict[str, int]] = None,
-        paper_context: Optional[Dict[str, Any]] = None
+        paper_context: Optional[Dict[str, Any]] = None,
+        reference_papers: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Generate AI response using Gemini
@@ -130,6 +174,7 @@ Provide your expert analysis:"""
             files_content: Uploaded files data
             personalization: User preferences
             paper_context: Paper being worked on
+            reference_papers: Lab/personal/literature papers for style analysis
 
         Returns:
             Dict with response content and metadata
@@ -143,7 +188,8 @@ Provide your expert analysis:"""
                 message=message,
                 files_content=files_content or [],
                 personalization=personalization,
-                paper_context=paper_context
+                paper_context=paper_context,
+                reference_papers=reference_papers
             )
 
             logger.info(f"🤖 Sending request to Gemini (prompt length: {len(prompt)} chars)")
@@ -161,7 +207,7 @@ Provide your expert analysis:"""
 
             return {
                 'content': response_text,
-                'model': 'gemini-1.5-flash',
+                'model': 'gemini-2.5-pro',
                 'citations': citations,
                 'metadata': {
                     'prompt_length': len(prompt),

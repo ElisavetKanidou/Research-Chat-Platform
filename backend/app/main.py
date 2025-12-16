@@ -12,7 +12,10 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.core.exceptions import ResearchPlatformException
 from app.database.connection import engine
+from app.database.session import DatabaseSession
 from app.models.base import Base
+from app.services.scheduler_service import scheduler_service
+from app.services.presence_service import presence_service
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,10 +34,32 @@ async def lifespan(app: FastAPI):
 
     logger.info("Database tables created successfully")
 
+    # Start scheduler for notifications and reports
+    try:
+        scheduler_service.start()
+        logger.info("✅ Scheduler service started (weekly reports, deadline reminders, AI suggestions)")
+    except Exception as e:
+        logger.warning(f"⚠️ Scheduler service failed to start: {str(e)}")
+
+    # Load recent user activity into presence cache
+    try:
+        async with DatabaseSession() as db:
+            await presence_service.load_recent_activity(db)
+        logger.info("✅ Presence cache loaded with recent user activity")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to load presence cache: {str(e)}")
+
     yield
 
     # Shutdown
     logger.info("Shutting down Research Platform API...")
+
+    # Stop scheduler
+    try:
+        scheduler_service.stop()
+        logger.info("⏹️ Scheduler service stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ Scheduler service failed to stop: {str(e)}")
 
 
 # Create FastAPI application

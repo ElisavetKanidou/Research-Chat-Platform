@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4"
     OPENAI_MAX_TOKENS: int = 2000
 
+    # Google Gemini AI (FREE!)
+    GEMINI_API_KEY: Optional[str] = None
+
     # Email
     EMAIL_FROM: str = "noreply@research-platform.com"
     EMAIL_FROM_NAME: str = "Research Platform"

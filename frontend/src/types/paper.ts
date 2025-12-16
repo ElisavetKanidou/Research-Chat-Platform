@@ -43,7 +43,8 @@ export interface Paper {
   journal?: string;
   publicationDate?: Date;
   citationCount?: number;
-  
+  deadline?: Date;
+
   // ✅ NEW: AI Settings
   aiSettings?: PaperAISettings;  // Add this line
 }

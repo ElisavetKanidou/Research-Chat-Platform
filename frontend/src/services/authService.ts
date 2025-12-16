@@ -72,12 +72,35 @@ class AuthService {
   // Register new user
   async register(userData: RegisterRequest): Promise<LoginResponse> {
     try {
-      const response = await apiClient.post<LoginResponse>(`${this.basePath}/register`, userData);
-      this.setTokens(response.accessToken, response.refreshToken);
+      console.log('🔍 [AuthService] Starting registration...');
+
+      const response = await apiClient.post<any>(`${this.basePath}/register`, userData);
+
+      console.log('🔍 [AuthService] Registration response:', response);
+
+      // Backend returns: { access_token, refresh_token, token_type, expires_in, user }
+      const accessToken = response.access_token || response.accessToken;
+      const refreshToken = response.refresh_token || response.refreshToken;
+
+      if (!accessToken) {
+        console.error('❌ [AuthService] No access token in registration response:', response);
+        throw new Error('No access token received from server');
+      }
+
+      console.log('🔍 [AuthService] Saving tokens...');
+      this.setTokens(accessToken, refreshToken);
       this.setUserData(response.user);
-      return response;
+
+      console.log('🔍 [AuthService] Registration complete!');
+
+      return {
+        user: response.user,
+        accessToken,
+        refreshToken,
+        expiresIn: response.expires_in || response.expiresIn || 3600,
+      };
     } catch (error) {
-      console.error('Registration failed:', error);
+      console.error('❌ [AuthService] Registration failed:', error);
       throw error;
     }
   }

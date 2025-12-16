@@ -72,7 +72,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       case 'notification':
         // Add new notification to the list
         const newNotification: Notification = {
-          id: `ws-${Date.now()}`,
+          id: lastMessage.data?.notification_id || `ws-${Date.now()}`, // ✅ Use DB ID from backend
           type: lastMessage.notification_type,
           title: lastMessage.title,
           message: lastMessage.message,
@@ -80,9 +80,22 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           created_at: lastMessage.timestamp,
           data: lastMessage.data
         };
-        setNotifications(prev => [newNotification, ...prev]);
-        setUnreadCount(prev => prev + 1);
-        console.log('🔔 New notification added:', newNotification);
+
+        // ✅ Prevent duplicates by checking if notification already exists
+        setNotifications(prev => {
+          if (prev.some(n => n.id === newNotification.id)) {
+            console.log('⚠️ Notification already exists, skipping duplicate:', newNotification.id);
+            return prev;
+          }
+          console.log('🔔 New notification added:', newNotification);
+          return [newNotification, ...prev];
+        });
+
+        // Only increment count if notification was actually added (not a duplicate)
+        setUnreadCount(prev => {
+          const isDuplicate = notifications.some(n => n.id === newNotification.id);
+          return isDuplicate ? prev : prev + 1;
+        });
         break;
 
       case 'paper_update':

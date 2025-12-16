@@ -33,11 +33,13 @@ from app.models.chat import (
 from app.models.collaboration import (
     CollaborationInvite,
     PaperVersion,
-    PaperComment,
     CollaborationSession,
     CollaborationRole,
     InvitationStatus
 )
+
+# Comment models
+from app.models.comment import PaperComment
 
 # Analytics models
 from app.models.analytics import (
@@ -45,6 +47,15 @@ from app.models.analytics import (
     PaperAnalytics,
     ActivityLog
 )
+
+# Notification models
+from app.models.notification import Notification, NotificationType
+
+# OAuth token models
+from app.models.oauth_token import OAuthToken
+
+# Reference papers for AI personalization
+from app.models.reference_paper import ReferencePaper, PaperType
 
 __all__ = [
     # Base
@@ -74,13 +85,26 @@ __all__ = [
     # Collaboration
     "CollaborationInvite",
     "PaperVersion",
-    "PaperComment",
     "CollaborationSession",
     "CollaborationRole",
     "InvitationStatus",
+
+    # Comments
+    "PaperComment",
 
     # Analytics
     "UserAnalytics",
     "PaperAnalytics",
     "ActivityLog",
+
+    # Notifications
+    "Notification",
+    "NotificationType",
+
+    # OAuth
+    "OAuthToken",
+
+    # Reference Papers
+    "ReferencePaper",
+    "PaperType",
 ]

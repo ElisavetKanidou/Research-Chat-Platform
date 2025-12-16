@@ -1,9 +1,9 @@
 """
-WebSocket service for real-time notifications
+WebSocket service for real-time notifications and presence tracking
 """
 import logging
 import json
-from typing import Dict, Set
+from typing import Dict, Set, List
 from fastapi import WebSocket
 from datetime import datetime
 
@@ -108,6 +108,29 @@ class ConnectionManager:
     def get_total_connections(self) -> int:
         """Get total number of active connections"""
         return sum(len(connections) for connections in self.active_connections.values())
+
+    def is_user_connected(self, user_id: str) -> bool:
+        """Check if user has any active WebSocket connections"""
+        return user_id in self.active_connections and len(self.active_connections[user_id]) > 0
+
+    async def broadcast_presence_update(self, user_id: str, status: str, user_ids: List[str]):
+        """
+        Broadcast user presence update to specific users (e.g., collaborators)
+
+        Args:
+            user_id: User whose presence changed
+            status: 'online', 'away', or 'offline'
+            user_ids: List of user IDs to notify
+        """
+        message = {
+            "type": "presence",
+            "user_id": user_id,
+            "status": status,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        await self.broadcast_to_users(message, user_ids)
+        logger.debug(f"📡 Broadcasted presence update for user {user_id}: {status}")
 
 
 # Global instance

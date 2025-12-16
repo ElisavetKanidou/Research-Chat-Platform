@@ -36,6 +36,7 @@ class User(BaseModel):
 
     # Timestamps
     last_login_at = Column(DateTime, nullable=True)
+    last_active_at = Column(DateTime, nullable=True)
     email_verified_at = Column(DateTime, nullable=True)
 
     # User preferences stored as JSON with proper default
@@ -61,6 +62,13 @@ class User(BaseModel):
             "dataSyncEnabled": True,
             "allowResearchSharing": False,
             "trackingOptOut": False
+        },
+        "integrations": {
+            "googleDrive": False,
+            "dropbox": False,
+            "zotero": False,
+            "mendeley": False,
+            "latex": False
         }
     })
 
@@ -98,6 +106,14 @@ class User(BaseModel):
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan"
+    )
+
+    # Reference papers for AI personalization
+    reference_papers = relationship(
+        "ReferencePaper",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="desc(ReferencePaper.created_at)"
     )
 
     analytics = relationship(
@@ -152,6 +168,48 @@ class User(BaseModel):
     def update_last_login(self) -> None:
         """Update last login timestamp"""
         self.last_login_at = datetime.utcnow()
+
+    def update_last_active(self) -> None:
+        """Update last active timestamp"""
+        self.last_active_at = datetime.utcnow()
+
+    def is_online(self) -> bool:
+        """Check if user is online (active in last 5 minutes)"""
+        if not self.last_active_at:
+            return False
+        delta = datetime.utcnow() - self.last_active_at
+        return delta.total_seconds() < 300  # 5 minutes
+
+    def is_away(self) -> bool:
+        """Check if user is away (active 5-30 minutes ago)"""
+        if not self.last_active_at:
+            return False
+        delta = datetime.utcnow() - self.last_active_at
+        return 300 <= delta.total_seconds() < 1800  # 5-30 minutes
+
+    def get_last_seen_text(self) -> str:
+        """Get human-readable last seen text"""
+        if not self.last_active_at:
+            return "Never"
+
+        delta = datetime.utcnow() - self.last_active_at
+        seconds = int(delta.total_seconds())
+
+        if seconds < 60:
+            return "Just now"
+        elif seconds < 300:  # < 5 minutes
+            return "Active now"
+        elif seconds < 3600:  # < 1 hour
+            minutes = seconds // 60
+            return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+        elif seconds < 86400:  # < 1 day
+            hours = seconds // 3600
+            return f"{hours} hour{'s' if hours != 1 else ''} ago"
+        elif seconds < 604800:  # < 1 week
+            days = seconds // 86400
+            return f"{days} day{'s' if days != 1 else ''} ago"
+        else:
+            return self.last_active_at.strftime('%b %d, %Y')
 
     def verify_email(self) -> None:
         """Mark email as verified"""

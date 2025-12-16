@@ -56,12 +56,17 @@ async def websocket_endpoint(
     # Accept connection
     await connection_manager.connect(websocket, user_id)
 
-    # Send welcome message
-    await websocket.send_json({
-        "type": "connected",
-        "message": "WebSocket connection established",
-        "user_id": user_id
-    })
+    # Send welcome message (wrapped in try-catch in case connection closes immediately)
+    try:
+        await websocket.send_json({
+            "type": "connected",
+            "message": "WebSocket connection established",
+            "user_id": user_id
+        })
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to send welcome message (connection may have closed): {str(e)}")
+        connection_manager.disconnect(websocket, user_id)
+        return
 
     try:
         # Keep connection alive and handle incoming messages
@@ -74,16 +79,24 @@ async def websocket_endpoint(
 
             if message_type == "ping":
                 # Respond to ping with pong
-                await websocket.send_json({"type": "pong"})
+                try:
+                    await websocket.send_json({"type": "pong"})
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to send pong: {str(e)}")
+                    break
 
             elif message_type == "subscribe":
                 # Subscribe to specific channels (paper updates, collaborations, etc.)
                 channel = data.get("channel")
                 logger.info(f"📡 User {user_id} subscribed to channel: {channel}")
-                await websocket.send_json({
-                    "type": "subscribed",
-                    "channel": channel
-                })
+                try:
+                    await websocket.send_json({
+                        "type": "subscribed",
+                        "channel": channel
+                    })
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to send subscription confirmation: {str(e)}")
+                    break
 
             else:
                 logger.warning(f"⚠️ Unknown message type: {message_type}")
@@ -93,7 +106,7 @@ async def websocket_endpoint(
         connection_manager.disconnect(websocket, user_id)
 
     except Exception as e:
-        logger.error(f"❌ WebSocket error for user {user_id}: {str(e)}")
+        logger.warning(f"⚠️ WebSocket connection closed for user {user_id}: {str(e)}")
         connection_manager.disconnect(websocket, user_id)
 
 

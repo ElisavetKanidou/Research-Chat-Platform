@@ -172,6 +172,9 @@ class PaperService:
 
         for field, value in update_data.items():
             if hasattr(paper, field):
+                # Convert timezone-aware datetime to timezone-naive for PostgreSQL
+                if isinstance(value, datetime) and value.tzinfo is not None:
+                    value = value.replace(tzinfo=None)
                 setattr(paper, field, value)
 
         paper.updated_at = datetime.utcnow()

@@ -76,6 +76,9 @@ class Paper(BaseModel):
     publication_date = Column(DateTime, nullable=True)
     citation_count = Column(Integer, default=0, nullable=False)
 
+    # Deadline tracking
+    deadline = Column(DateTime, nullable=True)
+
     # Owner relationship
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     owner = relationship("User", back_populates="papers")
@@ -104,7 +107,7 @@ class Paper(BaseModel):
         cascade="all, delete-orphan"
     )
     comments = relationship(
-        "PaperComment",
+        "app.models.comment.PaperComment",
         back_populates="paper",
         cascade="all, delete-orphan"
     )
@@ -282,6 +285,14 @@ class PaperSection(BaseModel):
     # Parent paper relationship
     paper_id = Column(UUID(as_uuid=True), ForeignKey("papers.id"), nullable=False)
     paper = relationship("Paper", back_populates="sections")
+
+    # Comments relationship
+    comments = relationship(
+        "app.models.comment.PaperComment",
+        back_populates="section",
+        cascade="all, delete-orphan",
+        order_by="app.models.comment.PaperComment.created_at"
+    )
 
     def __repr__(self) -> str:
         return f"<PaperSection(id={self.id}, title='{self.title}', status='{self.status}')>"

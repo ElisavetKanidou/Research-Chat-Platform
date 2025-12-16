@@ -98,16 +98,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper, onView
     .sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime())
     .slice(0, 5);
 
-  // Get upcoming deadlines
+  // Get upcoming deadlines - using REAL deadline field from papers
   const upcomingDeadlines: Deadline[] = safePapers
-    .filter(p => ['in-progress', 'in-review', 'revision'].includes(p.status))
-    .map((paper, index) => ({
+    .filter(p => p.deadline) // Only papers with actual deadlines
+    .map((paper) => ({
       id: `deadline-${paper.id}`,
-      title: `Complete ${paper.title}`,
-      dueDate: new Date(Date.now() + (index + 1) * 7 * 24 * 60 * 60 * 1000),
+      title: paper.title,
+      dueDate: paper.deadline instanceof Date ? paper.deadline : new Date(paper.deadline),
       paperId: paper.id,
     }))
-    .slice(0, 3);
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime()) // Sort by nearest deadline first
+    .slice(0, 5); // Show up to 5 upcoming deadlines
 
   // Get papers needing attention
   const papersNeedingAttention = safePapers.filter(p =>
@@ -284,21 +285,34 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper, onView
                   {upcomingDeadlines.length > 0 ? (
                     upcomingDeadlines.map((deadline) => {
                       const daysUntil = getDaysUntil(deadline.dueDate);
+                      const paper = safePapers.find(p => p.id === deadline.paperId);
                       return (
-                        <div key={deadline.id} className="p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <div
+                          key={deadline.id}
+                          className="p-3 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                          onClick={() => paper && onPaperSelect(paper)}
+                        >
                           <p className="font-medium text-gray-900 text-sm truncate">{deadline.title}</p>
                           <div className="flex items-center justify-between mt-2">
                             <p className="text-xs text-gray-500">
-                              {deadline.dueDate.toLocaleDateString()}
+                              {deadline.dueDate.toLocaleDateString('en-US', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
                             </p>
                             <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                              daysUntil <= 3
+                              daysUntil <= 0
                                 ? 'bg-red-100 text-red-700'
+                                : daysUntil <= 3
+                                ? 'bg-orange-100 text-orange-700'
                                 : daysUntil <= 7
                                 ? 'bg-yellow-100 text-yellow-700'
                                 : 'bg-green-100 text-green-700'
                             }`}>
-                              {daysUntil <= 0 ? 'Overdue' : `${daysUntil} days`}
+                              {daysUntil <= 0 ? 'Overdue!' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} days`}
                             </span>
                           </div>
                         </div>

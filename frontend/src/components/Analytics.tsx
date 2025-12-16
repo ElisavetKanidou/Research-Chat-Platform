@@ -51,8 +51,9 @@ const Analytics: React.FC = () => {
   const safePapers = papers.map(p => ({
     ...p,
     createdAt: p.createdAt instanceof Date ? p.createdAt : new Date(p.createdAt),
-    lastModified: (p as any).updated_at ? new Date((p as any).updated_at) : 
+    lastModified: (p as any).updated_at ? new Date((p as any).updated_at) :
                    p.lastModified instanceof Date ? p.lastModified : new Date(p.lastModified),
+    deadline: p.deadline ? (p.deadline instanceof Date ? p.deadline : new Date(p.deadline)) : undefined
   }));
 
   // Local stats as fallback
@@ -383,7 +384,12 @@ const Analytics: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                       <span className="font-medium text-gray-900 truncate">{paper.title}</span>
-                      <span className="text-sm text-gray-500 flex-shrink-0">{paper.createdAt.toLocaleDateString()}</span>
+                      <span className="text-sm text-gray-500 flex-shrink-0">
+                        {paper.deadline
+                          ? `Due ${paper.deadline.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                          : paper.createdAt.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+                        }
+                      </span>
                     </div>
                     <div className="text-sm text-gray-600">
                       {paper.status === 'published' ? 'Published' : `${paper.progress}% complete`}

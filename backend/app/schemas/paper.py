@@ -134,6 +134,9 @@ class PaperUpdate(BaseModel):
     publication_date: Optional[datetime] = Field(None, alias='publicationDate')
     citation_count: Optional[int] = Field(None, ge=0, alias='citationCount')
 
+    # Deadline field
+    deadline: Optional[datetime] = None
+
     @field_validator('tags', mode='before')
     @classmethod
     def validate_tags(cls, v):
@@ -169,6 +172,7 @@ class PaperListResponse(BaseModel):
     co_authors: List[str]
     tags: List[str]
     is_public: bool
+    deadline: Optional[datetime] = None  # Deadline field
 
     @field_validator('id', mode='before')
     @classmethod

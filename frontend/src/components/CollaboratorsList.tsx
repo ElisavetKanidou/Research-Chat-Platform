@@ -1,10 +1,13 @@
 // components/CollaboratorsList.tsx - FINAL FIXED
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Users, Mail, MoreVertical, Trash2, Edit } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
+import { usePresence } from '../hooks/usePresence';
+import PresenceIndicator from './PresenceIndicator';
 
 interface Collaborator {
   id: string;
+  user_id: string;
   name: string;
   email: string;
   role: 'viewer' | 'editor' | 'co-author' | 'owner';
@@ -23,6 +26,10 @@ const CollaboratorsList: React.FC<CollaboratorsListProps> = ({ paperId, compact 
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCollaborator, setSelectedCollaborator] = useState<string | null>(null);
+
+  // Track presence for all collaborators
+  const collaboratorIds = useMemo(() => collaborators.map(c => c.user_id), [collaborators]);
+  const { getStatus } = usePresence(collaboratorIds);
 
   useEffect(() => {
     fetchCollaborators();
@@ -138,8 +145,13 @@ const CollaboratorsList: React.FC<CollaboratorsListProps> = ({ paperId, compact 
         {collaborators.slice(0, 5).map((collab) => (
           <div key={collab.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
-                {collab.name.charAt(0).toUpperCase()}
+              <div className="relative">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
+                  {collab.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="absolute -bottom-0.5 -right-0.5">
+                  <PresenceIndicator status={getStatus(collab.user_id)} size="sm" />
+                </div>
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{collab.name}</p>
@@ -147,7 +159,6 @@ const CollaboratorsList: React.FC<CollaboratorsListProps> = ({ paperId, compact 
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {getStatusBadge(collab.status)}
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(collab.role)}`}>
                 {collab.role}
               </span>
@@ -173,16 +184,21 @@ const CollaboratorsList: React.FC<CollaboratorsListProps> = ({ paperId, compact 
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              {/* Avatar */}
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-lg font-medium">
-                {collab.name.charAt(0).toUpperCase()}
+              {/* Avatar with presence */}
+              <div className="relative">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-lg font-medium">
+                  {collab.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="absolute -bottom-1 -right-1">
+                  <PresenceIndicator status={getStatus(collab.user_id)} size="md" />
+                </div>
               </div>
 
               {/* Info */}
               <div>
                 <div className="flex items-center gap-2">
                   <p className="font-medium text-gray-900">{collab.name}</p>
-                  {getStatusBadge(collab.status)}
+                  <PresenceIndicator status={getStatus(collab.user_id)} showText size="sm" />
                   {collab.status === 'pending' && (
                     <span className="text-xs text-yellow-600">(Pending)</span>
                   )}

@@ -257,7 +257,7 @@ Would you like me to generate a detailed research proposal outline and identify 
               )}
               
               <div className="text-xs mt-2 opacity-70 text-right">
-                {message.timestamp.toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' })}
+                {message.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
           </div>

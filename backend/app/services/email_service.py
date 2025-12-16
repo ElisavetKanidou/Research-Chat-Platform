@@ -1,206 +1,123 @@
-
 """
-Email Service (app/services/email_service.py) - Enhanced version
+Email notification service
+backend/app/services/email_service.py
 """
+import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
-from typing import List, Optional, Dict, Any
-import logging
-from pathlib import Path
-
-from app.core.config import settings
-from app.core.exceptions import ValidationException
-
-logger = logging.getLogger(__name__)
+from typing import List, Optional, Dict
+from jinja2 import Template
+import aiosmtplib
 
 
 class EmailService:
-    """Enhanced email service"""
+    """Service for sending email notifications"""
 
     def __init__(self):
-        self.smtp_host = settings.SMTP_HOST
-        self.smtp_port = settings.SMTP_PORT
-        self.smtp_user = settings.SMTP_USER
-        self.smtp_password = settings.SMTP_PASSWORD
-        self.from_email = settings.EMAIL_FROM
-        self.from_name = settings.EMAIL_FROM_NAME
-
-        # Email templates
-        self.templates = {
-            "welcome": self._get_welcome_template(),
-            "invitation": self._get_invitation_template(),
-            "password_reset": self._get_password_reset_template(),
-            "paper_shared": self._get_paper_shared_template()
-        }
-
-    async def send_templated_email(
-            self,
-            template: str,
-            to_emails: List[str],
-            subject: str,
-            context: Dict[str, Any],
-            attachments: Optional[List[str]] = None
-    ) -> bool:
-        """Send templated email"""
-
-        if template not in self.templates:
-            raise ValidationException(f"Unknown email template: {template}")
-
-        # Render template
-        html_body = self.templates[template].format(**context)
-        text_body = self._html_to_text(html_body)
-
-        return await self.send_email(
-            to_emails=to_emails,
-            subject=subject,
-            body=text_body,
-            html_body=html_body,
-            attachments=attachments
-        )
+        self.smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_user = os.getenv("SMTP_USER", "")
+        self.smtp_password = os.getenv("SMTP_PASSWORD", "")
+        self.from_email = os.getenv("FROM_EMAIL", self.smtp_user)
+        self.from_name = os.getenv("FROM_NAME", "Research Platform")
 
     async def send_email(
-            self,
-            to_emails: List[str],
-            subject: str,
-            body: str,
-            html_body: Optional[str] = None,
-            attachments: Optional[List[str]] = None
-    ) -> bool:
-        """Send email with optional attachments"""
-
-        if not self.smtp_host:
-            logger.warning("SMTP not configured, email not sent")
-            return False
-
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        text_content: Optional[str] = None
+    ) -> Dict:
+        """Send an email"""
         try:
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            msg['From'] = f"{self.from_name} <{self.from_email}>"
-            msg['To'] = ', '.join(to_emails)
+            # Create message
+            message = MIMEMultipart("alternative")
+            message["Subject"] = subject
+            message["From"] = f"{self.from_name} <{self.from_email}>"
+            message["To"] = to_email
 
-            # Add text part
-            text_part = MIMEText(body, 'plain')
-            msg.attach(text_part)
+            # Add plain text version
+            if text_content:
+                part1 = MIMEText(text_content, "plain")
+                message.attach(part1)
 
-            # Add HTML part if provided
-            if html_body:
-                html_part = MIMEText(html_body, 'html')
-                msg.attach(html_part)
-
-            # Add attachments
-            if attachments:
-                for file_path in attachments:
-                    if Path(file_path).exists():
-                        with open(file_path, "rb") as attachment:
-                            part = MIMEBase('application', 'octet-stream')
-                            part.set_payload(attachment.read())
-
-                        encoders.encode_base64(part)
-                        part.add_header(
-                            'Content-Disposition',
-                            f'attachment; filename= {Path(file_path).name}',
-                        )
-                        msg.attach(part)
+            # Add HTML version
+            part2 = MIMEText(html_content, "html")
+            message.attach(part2)
 
             # Send email
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                if self.smtp_user and self.smtp_password:
-                    server.starttls()
-                    server.login(self.smtp_user, self.smtp_password)
+            await aiosmtplib.send(
+                message,
+                hostname=self.smtp_host,
+                port=self.smtp_port,
+                username=self.smtp_user,
+                password=self.smtp_password,
+                use_tls=True
+            )
 
-                server.send_message(msg)
-
-            logger.info(f"Email sent to {len(to_emails)} recipients")
-            return True
+            print(f"✅ Email sent to {to_email}: {subject}")
+            return {
+                'success': True,
+                'to': to_email,
+                'subject': subject
+            }
 
         except Exception as e:
-            logger.error(f"Failed to send email: {e}")
-            return False
+            print(f"❌ Failed to send email to {to_email}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
 
-    def _get_welcome_template(self) -> str:
-        """Welcome email template"""
-        return """
+    async def send_comment_notification(
+        self,
+        to_email: str,
+        to_name: str,
+        author_name: str,
+        paper_title: str,
+        comment_content: str,
+        paper_url: str
+    ) -> Dict:
+        """Send notification about new comment"""
+        subject = f"New comment on '{paper_title}'"
+
+        html_content = """
         <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background-color: #3b82f6; color: white; padding: 20px; text-align: center; }
+                .content { padding: 20px; background-color: #f9fafb; }
+                .comment { background-color: white; padding: 15px; border-left: 4px solid #3b82f6; margin: 15px 0; }
+                .button { display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 6px; margin-top: 20px; }
+                .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }
+            </style>
+        </head>
         <body>
-            <h2>Welcome to Research Platform, {user_name}!</h2>
-            <p>We're excited to help you with your research journey.</p>
-
-            <h3>Get started by:</h3>
-            <ul>
-                <li>Creating your first research paper</li>
-                <li>Exploring AI-powered research assistance</li>
-                <li>Setting up your research preferences</li>
-            </ul>
-
-            <p>If you have any questions, don't hesitate to reach out.</p>
-            <p>Best regards,<br>The Research Platform Team</p>
+            <div class="container">
+                <div class="header">
+                    <h1>New Comment</h1>
+                </div>
+                <div class="content">
+                    <p>Hi """ + to_name + """,</p>
+                    <p><strong>""" + author_name + """</strong> commented on your paper <strong>\"""" + paper_title + """\"</strong>:</p>
+                    <div class="comment">
+                        """ + comment_content + """
+                    </div>
+                    <a href=\"""" + paper_url + """\" class="button">View Paper</a>
+                </div>
+                <div class="footer">
+                    <p>You received this email because you are a collaborator on this paper.</p>
+                    <p>Research Platform</p>
+                </div>
+            </div>
         </body>
         </html>
         """
 
-    def _get_invitation_template(self) -> str:
-        """Collaboration invitation template"""
-        return """
-        <html>
-        <body>
-            <h2>Collaboration Invitation</h2>
-            <p>You've been invited to collaborate on the research paper "{paper_title}".</p>
-
-            <p><strong>Role:</strong> {role}</p>
-            <p><strong>Invited by:</strong> {inviter_name}</p>
-
-            {message}
-
-            <p><a href="{accept_url}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Accept Invitation</a></p>
-
-            <p><small>This invitation expires on {expiry_date}.</small></p>
-        </body>
-        </html>
-        """
-
-    def _get_password_reset_template(self) -> str:
-        """Password reset template"""
-        return """
-        <html>
-        <body>
-            <h2>Reset Your Password</h2>
-            <p>You requested a password reset for your Research Platform account.</p>
-
-            <p><a href="{reset_url}" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reset Password</a></p>
-
-            <p>This link will expire in 1 hour.</p>
-            <p>If you didn't request this, please ignore this email.</p>
-        </body>
-        </html>
-        """
-
-    def _get_paper_shared_template(self) -> str:
-        """Paper shared template"""
-        return """
-        <html>
-        <body>
-            <h2>Paper Shared With You</h2>
-            <p>{sharer_name} has shared the research paper "{paper_title}" with you.</p>
-
-            <p><strong>Research Area:</strong> {research_area}</p>
-            <p><strong>Status:</strong> {status}</p>
-
-            <p><a href="{paper_url}" style="background-color: #17a2b8; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Paper</a></p>
-        </body>
-        </html>
-        """
-
-    def _html_to_text(self, html: str) -> str:
-        """Convert HTML to plain text"""
-        # Simple HTML to text conversion
-        import re
-        text = re.sub('<[^<]+?>', '', html)
-        text = re.sub(r'\s+', ' ', text)
-        return text.strip()
+        return await self.send_email(to_email, subject, html_content)
 
 
-# Create service instance
 email_service = EmailService()

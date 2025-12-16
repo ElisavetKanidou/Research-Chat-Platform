@@ -216,9 +216,11 @@ async def create_notification(
     message: str,
     link: Optional[str] = None
 ):
-    """Helper function to create a notification"""
+    """Helper function to create a notification and send it via WebSocket and email"""
 
     from uuid import UUID
+    from app.services.websocket_service import connection_manager
+    from app.services.email_service import email_service
 
     notification = Notification(
         user_id=UUID(user_id),
@@ -234,5 +236,87 @@ async def create_notification(
     await db.refresh(notification)
 
     logger.info(f"✅ Created notification for user {user_id}: {title}")
+
+    # ✅ SEND VIA WEBSOCKET
+    try:
+        await connection_manager.send_notification(
+            user_id=user_id,
+            notification_type=type.value,
+            title=title,
+            message=message,
+            data={
+                "id": str(notification.id),
+                "link": link,
+                "created_at": notification.created_at.isoformat()
+            }
+        )
+        logger.info(f"📡 Sent notification via WebSocket to user {user_id}")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to send WebSocket notification: {e}")
+        # Don't fail if WebSocket send fails - notification is still in DB
+
+    # ✅ SEND VIA EMAIL (if user has email notifications enabled)
+    try:
+        # Fetch user to check email preferences
+        user_query = select(User).where(User.id == UUID(user_id))
+        user_result = await db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+
+        if user and user.should_send_email_notification(type.value):
+            # Map notification types to email types
+            notification_type_map = {
+                "deadline": "deadline",
+                "collaboration": "collaboration",
+                "comment": "collaboration",
+                "mention": "collaboration",
+                "paper_shared": "collaboration"
+            }
+            email_type = notification_type_map.get(type.value, "general")
+
+            # Send email notification
+            html_content = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background-color: #3b82f6; color: white; padding: 20px; text-align: center; }}
+                    .content {{ padding: 20px; background-color: #f9fafb; }}
+                    .notification {{ background-color: white; padding: 15px; border-left: 4px solid #3b82f6; margin: 15px 0; }}
+                    .button {{ display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 6px; margin-top: 20px; }}
+                    .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 12px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>{title}</h1>
+                    </div>
+                    <div class="content">
+                        <p>Hi {user.name},</p>
+                        <div class="notification">
+                            {message}
+                        </div>
+                        {f'<a href="{link}" class="button">View Details</a>' if link else ''}
+                    </div>
+                    <div class="footer">
+                        <p>You received this email because you have email notifications enabled.</p>
+                        <p>Research Platform</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+
+            await email_service.send_email(
+                to_email=user.email,
+                subject=title,
+                html_content=html_content,
+                text_content=message
+            )
+            logger.info(f"📧 Sent email notification to {user.email}")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to send email notification: {e}")
+        # Don't fail if email send fails - notification is still in DB
 
     return notification
