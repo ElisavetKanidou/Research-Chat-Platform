@@ -51,8 +51,7 @@ class Paper(BaseModel):
     research_area = Column(String(255), nullable=True)
     tags = Column(JSON, nullable=True, default=[])  # Array of tag strings
 
-    # Collaboration
-    co_authors = Column(JSON, nullable=True, default=[])  # Array of co-author names
+    # Collaboration (via paper_collaborators table)
     is_public = Column(Boolean, default=False, nullable=False)
 
     # ✅ AI Personalization Settings (per-paper, no global dependency)

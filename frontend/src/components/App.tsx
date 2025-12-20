@@ -9,11 +9,13 @@ import PapersManagement from './PapersManagement';
 import Analytics from './Analytics';
 import SettingsPanel from './SettingsPanel';
 import PaperWorkspace from './PaperWorkspace';
+import ReferencePapers from './ReferencePapers';
+import UploadReferencePaperForm from './UploadReferencePaperForm';
 import LoginPage from './auth/LoginPage';
 import NotificationBell from './layout/NotificationBell';
 import { Search, Menu, X, LogOut } from 'lucide-react';
 
-type ViewType = 'dashboard' | 'papers' | 'workspace' | 'analytics' | 'settings';
+type ViewType = 'dashboard' | 'papers' | 'workspace' | 'analytics' | 'settings' | 'reference-papers';
 
 // Notification Component
 const NotificationCenter: React.FC = () => {
@@ -68,7 +70,9 @@ const NotificationCenter: React.FC = () => {
 // Main Research Platform component
 const ResearchPlatform: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
-  
+  const [showUploadReferenceForm, setShowUploadReferenceForm] = useState(false);
+  const [referencePapersRefreshTrigger, setReferencePapersRefreshTrigger] = useState(0);
+
   const {
     user,
     searchQuery,
@@ -113,6 +117,7 @@ const ResearchPlatform: React.FC = () => {
   const navigationItems = [
     { key: 'dashboard', label: 'Dashboard', icon: '📊' },
     { key: 'papers', label: 'Papers', icon: '📄' },
+    { key: 'reference-papers', label: 'Reference Papers', icon: '📚' },
     { key: 'analytics', label: 'Analytics', icon: '📈' },
     { key: 'settings', label: 'Settings', icon: '⚙️' },
   ];
@@ -125,15 +130,22 @@ const ResearchPlatform: React.FC = () => {
           <Dashboard
             onPaperSelect={handlePaperSelect}
             onNewPaper={handleNewPaper}
-            // ✅ ΔΙΟΡΘΩΣΗ: Προστέθηκε το prop για αλλαγή σελίδας
             onViewAnalytics={() => setCurrentView('analytics')}
+            onManageReferencePapers={() => setCurrentView('reference-papers')}
           />
         );
       case 'papers':
         return (
-          <PapersManagement 
+          <PapersManagement
             onPaperSelect={handlePaperSelect}
             onNewPaper={handleNewPaper}
+          />
+        );
+      case 'reference-papers':
+        return (
+          <ReferencePapers
+            onUploadClick={() => setShowUploadReferenceForm(true)}
+            refreshTrigger={referencePapersRefreshTrigger}
           />
         );
       case 'workspace':
@@ -144,8 +156,8 @@ const ResearchPlatform: React.FC = () => {
         return <SettingsPanel />;
       default:
         return (
-          <Dashboard 
-            onPaperSelect={handlePaperSelect} 
+          <Dashboard
+            onPaperSelect={handlePaperSelect}
             onNewPaper={handleNewPaper}
             onViewAnalytics={() => setCurrentView('analytics')}
           />
@@ -272,6 +284,18 @@ const ResearchPlatform: React.FC = () => {
 
       {/* Notifications */}
       <NotificationCenter />
+
+      {/* Upload Reference Paper Modal */}
+      {showUploadReferenceForm && (
+        <UploadReferencePaperForm
+          onClose={() => setShowUploadReferenceForm(false)}
+          onSuccess={() => {
+            setShowUploadReferenceForm(false);
+            // Trigger refresh of Reference Papers list
+            setReferencePapersRefreshTrigger(prev => prev + 1);
+          }}
+        />
+      )}
     </div>
   );
 };

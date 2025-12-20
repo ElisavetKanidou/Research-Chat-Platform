@@ -70,8 +70,8 @@ class ReferencePaper(BaseModel):
     #   "section_structure": ["introduction", "methodology", "results"]
     # }
 
-    # Metadata
-    metadata = Column(JSON, nullable=True, default=dict)
+    # Paper metadata (renamed from 'metadata' to avoid SQLAlchemy reserved keyword)
+    paper_metadata = Column(JSON, nullable=True, default=dict)
     # Additional info like:
     # - Number of pages
     # - Language
@@ -104,7 +104,7 @@ class ReferencePaper(BaseModel):
             "is_analyzed": self.is_analyzed,
             "analysis_date": self.analysis_date,
             "writing_style_features": self.writing_style_features,
-            "metadata": self.metadata,
+            "metadata": self.paper_metadata,
             "times_used": self.times_used,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

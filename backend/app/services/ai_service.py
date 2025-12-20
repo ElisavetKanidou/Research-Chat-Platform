@@ -158,24 +158,31 @@ class AIService:
     def _extract_personalization(
         self,
         settings: Optional[Dict]
-    ) -> Dict[str, int]:
+    ) -> Dict:
         """
         Extract and validate personalization parameters.
 
-        Returns normalized 0-10 scale values for each influence layer.
+        Returns normalized 0-10 scale values for each influence layer,
+        plus writing style, context depth, and research focus.
         """
         if not settings:
             # Default balanced personalization
             return {
                 'lab': 7,
                 'personal': 8,
-                'global': 5
+                'global': 5,
+                'writing_style': 'academic',
+                'context_depth': 'moderate',
+                'research_focus': []
             }
 
         return {
             'lab': max(0, min(10, getattr(settings, 'lab_level', 7))),
             'personal': max(0, min(10, getattr(settings, 'personal_level', 8))),
-            'global': max(0, min(10, getattr(settings, 'global_level', 5)))
+            'global': max(0, min(10, getattr(settings, 'global_level', 5))),
+            'writing_style': getattr(settings, 'writing_style', 'academic'),
+            'context_depth': getattr(settings, 'context_depth', 'moderate'),
+            'research_focus': getattr(settings, 'research_focus', [])
         }
 
     def _build_personalized_system_prompt(
@@ -183,7 +190,7 @@ class AIService:
         user: User,
         paper_context: Optional[Paper],
         user_papers_context: Optional[List[Dict]],
-        personalization: Dict[str, int]
+        personalization: Dict
     ) -> str:
         """
         Build sophisticated system prompt with 3-layer personalization.
@@ -191,6 +198,10 @@ class AIService:
         This is the core of the adaptive AI assistant - it dynamically
         adjusts guidance based on the personalization influence settings.
         """
+
+        # Get writing style and context depth descriptions
+        writing_style_desc = self._get_writing_style_description(personalization.get('writing_style', 'academic'))
+        context_depth_desc = self._get_context_depth_description(personalization.get('context_depth', 'moderate'))
 
         # Base expert assistant identity
         prompt = f"""You are an intelligent research assistant helping {user.name or 'a researcher'} with academic writing and research development.
@@ -202,7 +213,8 @@ Your core capabilities:
 - Learn from user feedback to refine future suggestions
 - Maintain high academic standards and research integrity
 
-Writing style: Academic, clear, rigorous
+Writing Style: {writing_style_desc}
+Context Depth: {context_depth_desc}
 Tone: Supportive, encouraging, professionally critical
 """
 
@@ -251,6 +263,15 @@ customize your guidance. Adjust your recommendations accordingly:
 3. GLOBAL LITERATURE INFLUENCE: {personalization['global']}/10
    {"█" * personalization['global']}{"░" * (10 - personalization['global'])}
    {self._get_global_influence_guidance(personalization['global'])}
+
+"""
+
+        # Add research focus if specified
+        research_focus = personalization.get('research_focus', [])
+        if research_focus and len(research_focus) > 0:
+            prompt += f"""4. RESEARCH FOCUS AREAS:
+   {', '.join(research_focus)}
+   → Tailor your guidance to these specific research domains
 
 """
 
@@ -346,6 +367,25 @@ succeed while maintaining the highest academic standards!
 
         guidelines += "\n"
         return guidelines
+
+    def _get_writing_style_description(self, style: str) -> str:
+        """Get description for writing style preference"""
+        styles = {
+            'academic': 'Academic - Formal, structured, and rigorous. Use precise terminology, formal language, and structured arguments.',
+            'concise': 'Concise - Brief and to the point. Prioritize clarity and brevity, eliminate unnecessary words, focus on core ideas.',
+            'detailed': 'Detailed - Comprehensive and thorough. Provide in-depth explanations, extensive context, and detailed examples.',
+            'collaborative': 'Collaborative - Discussion-oriented and inclusive. Use conversational tone, encourage dialogue, and consider multiple perspectives.'
+        }
+        return styles.get(style, styles['academic'])
+
+    def _get_context_depth_description(self, depth: str) -> str:
+        """Get description for context depth preference"""
+        depths = {
+            'minimal': 'Minimal - Quick, high-level responses. Focus on key points without extensive elaboration.',
+            'moderate': 'Moderate - Balanced detail. Provide sufficient context and explanation without overwhelming detail.',
+            'comprehensive': 'Comprehensive - In-depth analysis. Offer thorough explanations, multiple examples, and detailed background context.'
+        }
+        return depths.get(depth, depths['moderate'])
 
     async def _get_conversation_history(
         self,

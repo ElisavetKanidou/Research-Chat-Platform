@@ -24,7 +24,7 @@ from app.schemas.reference_paper import (
     ReferencePaperUploadResponse,
     ReferencePaperUpdate
 )
-from app.api.dependencies import get_current_user
+from app.api.v1.endpoints.auth import get_current_user
 from app.services.pdf_analyzer import pdf_analyzer
 
 router = APIRouter()
@@ -124,7 +124,7 @@ async def upload_reference_paper(
             abstract=abstract,
             is_analyzed=is_analyzed,
             writing_style_features=writing_features,
-            metadata={
+            paper_metadata={
                 "uploaded_at": datetime.utcnow().isoformat(),
                 "file_ext": file_ext,
             }

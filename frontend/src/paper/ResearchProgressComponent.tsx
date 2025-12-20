@@ -1,7 +1,9 @@
 // components/paper/ResearchProgressComponent.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import { Calendar, Target, TrendingUp, Clock, CheckCircle, BookOpen, Users } from 'lucide-react';
+import CollaboratorsList from '../components/CollaboratorsList';
+import InviteCollaboratorsModal from '../components/modals/InviteCollaboratorsModal';
 
 interface ResearchProgressComponentProps {
   paperId: string;
@@ -9,7 +11,8 @@ interface ResearchProgressComponentProps {
 
 const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ paperId }) => {
   const { papers, activePaper } = useGlobalContext();
-  
+  const [showInviteModal, setShowInviteModal] = useState(false);
+
   const paper = activePaper || papers.find(p => p.id === paperId);
 
   if (!paper) {
@@ -28,15 +31,17 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
   const getSections = () => paper.sections || [];
   const getCurrentWordCount = () => (paper as any).current_word_count || paper.currentWordCount || 0;
   const getTargetWordCount = () => (paper as any).target_word_count || paper.targetWordCount || 8000;
-  const getCoAuthors = () => (paper as any).co_authors || paper.coAuthors || [];
   const getResearchArea = () => (paper as any).research_area || paper.researchArea || '';
   const getCitationCount = () => (paper as any).citation_count || paper.citationCount || 0;
   const getLastModified = () => (paper as any).updated_at || paper.lastModified || paper.createdAt;
+  const getCreatedAt = () => {
+    const date = (paper as any).created_at || paper.createdAt;
+    return date;
+  };
 
   const sections = getSections();
   const currentWordCount = getCurrentWordCount();
   const targetWordCount = getTargetWordCount();
-  const coAuthors = getCoAuthors();
   const researchArea = getResearchArea();
   const citationCount = getCitationCount();
 
@@ -55,9 +60,23 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
     }
   };
 
-  const formatDate = (date: Date | string): string => {
-    const dateObj = date instanceof Date ? date : new Date(date);
-    return dateObj.toLocaleDateString();
+  const formatDate = (date: Date | string | null | undefined): string => {
+    if (!date) {
+      return 'Not set';
+    }
+
+    try {
+      const dateObj = date instanceof Date ? date : new Date(date);
+
+      // Check if date is valid
+      if (isNaN(dateObj.getTime())) {
+        return 'Not set';
+      }
+
+      return dateObj.toLocaleDateString();
+    } catch (error) {
+      return 'Not set';
+    }
   };
 
   return (
@@ -182,7 +201,7 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
             <div className="flex-1">
               <div className="font-medium text-gray-900">Paper Created</div>
               <div className="text-sm text-gray-500">
-                {formatDate(paper.createdAt)}
+                {formatDate(getCreatedAt())}
               </div>
             </div>
           </div>
@@ -229,33 +248,20 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
       </div>
 
       {/* Collaboration */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">Collaboration</h3>
-        <div className="space-y-3">
-          {coAuthors.length > 0 ? (
-            coAuthors.map((author: string, index: number) => (
-              <div key={index} className="flex items-center space-x-3 p-3 border rounded-lg">
-                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium flex-shrink-0">
-                  {author.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900">{author}</div>
-                  <div className="text-sm text-gray-500">Co-author</div>
-                </div>
-                <div className="w-2 h-2 bg-green-500 rounded-full" title="Active collaborator"></div>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <Users size={48} className="mx-auto text-gray-300 mb-4" />
-              <p className="font-medium">No collaborators yet</p>
-              <p className="text-sm">Invite others to collaborate on this research</p>
-              <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                Invite Collaborators
-              </button>
-            </div>
-          )}
+      <div className="bg-white rounded-lg shadow-sm p-6 border">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Collaboration</h3>
+          <div className="flex items-center gap-2">
+            <Users size={18} className="text-gray-500" />
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Invite More
+            </button>
+          </div>
         </div>
+        <CollaboratorsList paperId={paperId} compact={false} />
       </div>
 
       {/* Research Statistics */}
@@ -315,6 +321,13 @@ const ResearchProgressComponent: React.FC<ResearchProgressComponentProps> = ({ p
           </div>
         )}
       </div>
+
+      {/* Invite Collaborators Modal */}
+      <InviteCollaboratorsModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        paperId={paperId}
+      />
     </div>
   );
 };

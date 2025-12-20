@@ -1,6 +1,6 @@
 // components/Dashboard.tsx
 import React, { useState } from 'react';
-import { FileText, Clock, CheckCircle, Users, Calendar, TrendingUp, AlertCircle, Plus, ArrowRight } from 'lucide-react';
+import { FileText, Clock, CheckCircle, Users, Calendar, TrendingUp, AlertCircle, Plus, ArrowRight, BookOpen } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import InviteCollaboratorsModal from './modals/InviteCollaboratorsModal';
 import CollaboratorsList from './CollaboratorsList';
@@ -13,15 +13,14 @@ interface Deadline {
   paperId: string;
 }
 
-// 1. Προσθήκη του onViewAnalytics στο Interface
 interface DashboardProps {
   onPaperSelect: (paper: Paper) => void;
   onNewPaper: () => void;
-  onViewAnalytics: () => void; // <-- ΠΡΟΣΘΗΚΗ ΑΥΤΟΥ
+  onViewAnalytics: () => void;
+  onManageReferencePapers?: () => void;
 }
 
-// 2. Προσθήκη του onViewAnalytics στα props του component
-const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper, onViewAnalytics }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper, onViewAnalytics, onManageReferencePapers }) => {
   const { papers, loading, error, user } = useGlobalContext();
   const [showInviteModal, setShowInviteModal] = useState(false);
 
@@ -104,7 +103,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper, onView
     .map((paper) => ({
       id: `deadline-${paper.id}`,
       title: paper.title,
-      dueDate: paper.deadline instanceof Date ? paper.deadline : new Date(paper.deadline),
+      dueDate: paper.deadline instanceof Date
+        ? paper.deadline
+        : new Date(paper.deadline!), // Use non-null assertion since we filtered above
       paperId: paper.id,
     }))
     .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime()) // Sort by nearest deadline first
@@ -382,7 +383,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper, onView
             {/* Quick Actions */}
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <button
                   onClick={onNewPaper}
                   className="flex items-center p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border"
@@ -390,21 +391,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onPaperSelect, onNewPaper, onView
                   <Plus size={20} className="text-blue-600 mr-3" />
                   <span className="text-gray-700">Start New Research</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setShowInviteModal(true)}
                   className="flex items-center p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border"
                 >
                   <Users size={20} className="text-green-600 mr-3" />
                   <span className="text-gray-700">Invite Collaborators</span>
                 </button>
-                {/* 3. Σύνδεση του onClick στο κουμπί */}
-                <button 
-                  onClick={onViewAnalytics} 
+                <button
+                  onClick={onViewAnalytics}
                   className="flex items-center p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border"
                 >
                   <TrendingUp size={20} className="text-purple-600 mr-3" />
                   <span className="text-gray-700">View Analytics</span>
                 </button>
+                {onManageReferencePapers && (
+                  <button
+                    onClick={onManageReferencePapers}
+                    className="flex items-center p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors border"
+                  >
+                    <BookOpen size={20} className="text-orange-600 mr-3" />
+                    <span className="text-gray-700">Reference Papers</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

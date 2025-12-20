@@ -12,7 +12,7 @@ This is a complete, production-ready implementation with:
 # Also add these imports at the TOP of the file (if not already there):
 from datetime import datetime
 import time
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
@@ -32,7 +32,8 @@ from app.models.reference_paper import ReferencePaper
 from app.schemas.chat import (
     ChatMessageRequest, ChatMessageResponse, ChatHistoryResponse,
     PersonalizationSettingsUpdate, AddToSectionRequest, AddToSectionResponse,
-    GetSectionContentResponse, GetAllSectionsResponse
+    GetSectionContentResponse, GetAllSectionsResponse,
+    MessageFeedbackRequest, MessageFeedbackResponse
 )
 from app.services.ai_service import ai_service
 from app.services.paper_service import paper_service
@@ -91,6 +92,64 @@ async def get_user_reference_papers(db: AsyncSession, user_id: UUID) -> List[Dic
     except Exception as e:
         logger.error(f"❌ Failed to fetch reference papers: {str(e)}")
         return []
+
+
+def get_user_personalization_settings(user: User) -> Optional[Dict[str, int]]:
+    """
+    Get user's personalization settings from database
+
+    Args:
+        user: User object
+
+    Returns:
+        Dictionary with lab_level, personal_level, global_level or None
+    """
+    try:
+        if user.preferences and isinstance(user.preferences, dict):
+            ai_personalization = user.preferences.get('ai_personalization', {})
+            if ai_personalization:
+                settings = {
+                    'lab_level': ai_personalization.get('lab_level', 5),
+                    'personal_level': ai_personalization.get('personal_level', 5),
+                    'global_level': ai_personalization.get('global_level', 5)
+                }
+                logger.info(f"📊 Using personalization settings from database: {settings}")
+                return settings
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to get personalization settings: {str(e)}")
+
+    return None
+
+
+def get_personalization_settings(message_request, current_user: User) -> Optional[Dict]:
+    """
+    Get personalization settings - prefer request (paper-specific) over database (global)
+
+    Args:
+        message_request: Request object with optional personalization_settings
+        current_user: User object
+
+    Returns:
+        Dictionary with lab_level, personal_level, global_level, writing_style, context_depth, research_focus or None
+    """
+    if hasattr(message_request, 'personalization_settings') and message_request.personalization_settings:
+        # Use paper-specific settings from request
+        ps = message_request.personalization_settings
+        settings = {
+            'lab_level': ps.lab_level,
+            'personal_level': ps.personal_level,
+            'global_level': ps.global_level,
+            'writing_style': getattr(ps, 'writing_style', 'academic'),
+            'context_depth': getattr(ps, 'context_depth', 'moderate'),
+            'research_focus': getattr(ps, 'research_focus', [])
+        }
+        logger.info(f"📊 Using personalization from request (paper-specific): {settings}")
+        return settings
+    else:
+        # Fallback to global settings from database
+        settings = get_user_personalization_settings(current_user)
+        logger.info(f"📊 Using personalization from database (global): {settings}")
+        return settings
 
 
 # ==================== FILE PROCESSING UTILITIES ====================
@@ -225,11 +284,26 @@ async def send_chat_message(
                     # Fetch user's reference papers for style analysis
                     reference_papers = await get_user_reference_papers(db, current_user.id)
 
+                    # Get personalization settings - prefer request over database
+                    personalization = None
+                    if message_request.personalization_settings:
+                        # Use paper-specific settings from request
+                        personalization = {
+                            'lab_level': message_request.personalization_settings.lab_level,
+                            'personal_level': message_request.personalization_settings.personal_level,
+                            'global_level': message_request.personalization_settings.global_level
+                        }
+                        logger.info(f"📊 Using personalization settings from request (paper-specific): {personalization}")
+                    else:
+                        # Fallback to global settings from database
+                        personalization = get_user_personalization_settings(current_user)
+                        logger.info(f"📊 Using personalization settings from database (global): {personalization}")
+
                     # Generate response with Gemini
                     gemini_response = await gemini_service.generate_response(
                         message=message_request.content,
                         files_content=[],
-                        personalization=message_request.personalization_settings.dict() if message_request.personalization_settings else None,
+                        personalization=personalization,
                         paper_context=paper_ctx,
                         reference_papers=reference_papers
                     )
@@ -258,12 +332,24 @@ async def send_chat_message(
             if message_request.model == 'groq':
                 # User explicitly selected Groq
                 logger.info("🤖 Using Groq/Llama (user selected)")
+                # Get personalization settings - prefer request over database
+                personalization_dict = None
+                if message_request.personalization_settings:
+                    personalization_dict = {
+                        'lab_level': message_request.personalization_settings.lab_level,
+                        'personal_level': message_request.personalization_settings.personal_level,
+                        'global_level': message_request.personalization_settings.global_level
+                    }
+                    logger.info(f"📊 Using personalization from request: {personalization_dict}")
+                else:
+                    personalization_dict = get_user_personalization_settings(current_user)
+                    logger.info(f"📊 Using personalization from database: {personalization_dict}")
                 ai_response = await ai_service.process_chat_message(
                     user=current_user,
                     message=message_request.content,
                     paper_context=paper,
                     user_papers_context=message_request.user_papers_context,
-                    personalization_settings=message_request.personalization_settings,
+                    personalization_settings=personalization_dict,
                     db=db
                 )
             elif message_request.model in ['gpt-3.5', 'gpt-4']:
@@ -285,11 +371,24 @@ async def send_chat_message(
                                 'target_word_count': paper.target_word_count,
                             }
 
+                        # Get personalization settings - prefer request over database
+                        personalization = None
+                        if message_request.personalization_settings:
+                            personalization = {
+                                'lab_level': message_request.personalization_settings.lab_level,
+                                'personal_level': message_request.personalization_settings.personal_level,
+                                'global_level': message_request.personalization_settings.global_level
+                            }
+                            logger.info(f"📊 Using personalization from request: {personalization}")
+                        else:
+                            personalization = get_user_personalization_settings(current_user)
+                            logger.info(f"📊 Using personalization from database: {personalization}")
+
                         # Generate response with OpenAI
                         openai_response = await openai_service.generate_response(
                             message=message_request.content,
                             files_content=[],
-                            personalization=message_request.personalization_settings.dict() if message_request.personalization_settings else None,
+                            personalization=personalization,
                             paper_context=paper_ctx,
                             model=openai_model
                         )
@@ -309,39 +408,41 @@ async def send_chat_message(
 
                     except Exception as e:
                         logger.warning(f"⚠️ OpenAI failed, falling back to Groq: {str(e)}")
+                        personalization_dict = get_personalization_settings(message_request, current_user)
                         ai_response = await ai_service.process_chat_message(
                             user=current_user,
                             message=message_request.content,
                             paper_context=paper,
                             user_papers_context=message_request.user_papers_context,
-                            personalization_settings=message_request.personalization_settings,
+                            personalization_settings=personalization_dict,
                             db=db
                         )
                 else:
                     logger.warning("⚠️ OpenAI selected but not enabled, falling back to Groq")
+                    personalization_dict = get_personalization_settings(message_request, current_user)
                     ai_response = await ai_service.process_chat_message(
                         user=current_user,
                         message=message_request.content,
                         paper_context=paper,
                         user_papers_context=message_request.user_papers_context,
-                        personalization_settings=message_request.personalization_settings,
+                        personalization_settings=personalization_dict,
                         db=db
                     )
             else:
                 # Default fallback to Groq
                 logger.info(f"🤖 Using Groq/Llama (fallback for model: {message_request.model})")
+                personalization_dict = get_personalization_settings(message_request, current_user)
                 ai_response = await ai_service.process_chat_message(
                     user=current_user,
                     message=message_request.content,
                     paper_context=paper,
                     user_papers_context=message_request.user_papers_context,
-                    personalization_settings=message_request.personalization_settings,
+                    personalization_settings=personalization_dict,
                     db=db
                 )
 
-        # Save conversation to database in background (non-blocking)
-        background_tasks.add_task(
-            save_chat_conversation,
+        # Save conversation to database and get message ID
+        assistant_message_id = await save_chat_conversation(
             db,
             str(current_user.id),
             str(paper.id) if paper else None,
@@ -352,7 +453,7 @@ async def send_chat_message(
         logger.info(f"Successfully generated AI response for user {current_user.id}")
 
         return {
-            "messageId": getattr(ai_response, 'messageId', f"msg-{current_user.id}-{int(time.time())}"),
+            "messageId": assistant_message_id or getattr(ai_response, 'messageId', f"msg-{current_user.id}-{int(time.time())}"),
             "responseContent": getattr(ai_response, 'responseContent', str(ai_response)),
             "createdAt": getattr(ai_response, 'createdAt', datetime.now().isoformat()),
             "needsConfirmation": getattr(ai_response, 'needsConfirmation', False),
@@ -475,13 +576,24 @@ async def send_chat_message_with_files(
             except json.JSONDecodeError:
                 logger.warning("Invalid paper_context JSON")
 
-        # Parse personalization settings if provided
+        # Get personalization settings - prefer request over database
         personalization = None
         if personalization_settings:
             try:
-                personalization = json.loads(personalization_settings)
+                pers_dict = json.loads(personalization_settings)
+                personalization = {
+                    'lab_level': pers_dict.get('lab_level', 5),
+                    'personal_level': pers_dict.get('personal_level', 5),
+                    'global_level': pers_dict.get('global_level', 5)
+                }
+                logger.info(f"📊 Using personalization from request (paper-specific): {personalization}")
             except json.JSONDecodeError:
-                logger.warning("Invalid personalization_settings JSON")
+                logger.warning("Invalid personalization_settings JSON, using database settings")
+                personalization = get_user_personalization_settings(current_user)
+        else:
+            # Fallback to global settings from database
+            personalization = get_user_personalization_settings(current_user)
+            logger.info(f"📊 Using personalization from database (global): {personalization}")
 
         # Compare files if multiple uploaded
         comparison_summary = ""
@@ -699,9 +811,8 @@ async def send_chat_message_with_files(
                     db=db
                 )
 
-        # Save conversation to database in background
-        background_tasks.add_task(
-            save_chat_conversation,
+        # Save conversation to database and get message ID
+        assistant_message_id = await save_chat_conversation(
             db,
             str(current_user.id),
             str(paper.id) if paper else None,
@@ -712,7 +823,7 @@ async def send_chat_message_with_files(
         logger.info(f"Successfully processed message with files for user {current_user.id}")
 
         return {
-            "messageId": getattr(ai_response, 'messageId', f"msg-{current_user.id}-{int(time.time())}"),
+            "messageId": assistant_message_id or getattr(ai_response, 'messageId', f"msg-{current_user.id}-{int(time.time())}"),
             "responseContent": getattr(ai_response, 'responseContent', str(ai_response)),
             "createdAt": getattr(ai_response, 'createdAt', datetime.now().isoformat()),
             "needsConfirmation": getattr(ai_response, 'needsConfirmation', False),
@@ -1244,7 +1355,12 @@ async def save_chat_conversation(
         # Commit to database
         await db.commit()
 
-        logger.info(f"✅ Successfully saved conversation for user {user_id}")
+        # Refresh to get the generated UUID
+        await db.refresh(ai_msg)
+
+        logger.info(f"✅ Successfully saved conversation for user {user_id}, assistant message ID: {ai_msg.id}")
+
+        return str(ai_msg.id)  # Return the assistant message UUID
 
     except Exception as e:
         logger.error(f"Failed to save chat conversation: {str(e)}", exc_info=True)
@@ -1254,3 +1370,72 @@ async def save_chat_conversation(
             pass
         # Don't raise - this is a background task
         # Failures here shouldn't affect the user's chat experience
+
+
+@router.post("/feedback", response_model=MessageFeedbackResponse)
+async def submit_message_feedback(
+    feedback_request: MessageFeedbackRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Submit user feedback on an AI message.
+
+    Records whether a message was helpful or not helpful, which can be used to:
+    - Improve future AI responses
+    - Track message quality
+    - Provide analytics on AI performance
+    """
+    try:
+        from app.models.chat import ChatMessage
+        from uuid import UUID
+        from datetime import datetime
+
+        logger.info(f"📝 Recording feedback for message {feedback_request.message_id}: {'helpful' if feedback_request.helpful else 'not helpful'}")
+
+        # Get the message
+        message_uuid = UUID(feedback_request.message_id)
+        result = await db.execute(
+            select(ChatMessage).filter(ChatMessage.id == message_uuid)
+        )
+        message = result.scalar_one_or_none()
+
+        if not message:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Message not found"
+            )
+
+        # Verify the message belongs to the current user
+        if message.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to provide feedback on this message"
+            )
+
+        # Update feedback
+        message.user_feedback = feedback_request.helpful
+        message.feedback_timestamp = datetime.utcnow()
+
+        await db.commit()
+        await db.refresh(message)
+
+        logger.info(f"✅ Feedback recorded successfully for message {feedback_request.message_id}")
+
+        return MessageFeedbackResponse(
+            success=True,
+            message="Feedback recorded successfully",
+            message_id=str(message.id),
+            feedback=message.user_feedback,
+            feedback_timestamp=message.feedback_timestamp.isoformat()
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to record feedback: {str(e)}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to record feedback: {str(e)}"
+        )

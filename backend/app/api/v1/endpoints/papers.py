@@ -77,8 +77,13 @@ async def get_papers(
 
     logger.info(f"📄 Fetching papers for user {current_user.id}")
 
+    # Import selectinload for loading collaborators
+    from sqlalchemy.orm import selectinload
+
     # ✅ STEP 1: Get papers where user is OWNER
-    owned_query = select(Paper).where(Paper.owner_id == current_user.id)
+    owned_query = select(Paper).where(Paper.owner_id == current_user.id).options(
+        selectinload(Paper.collaborators)
+    )
 
     # Apply filters to owned papers
     if status_filter:
@@ -127,6 +132,8 @@ async def get_papers(
     if collab_paper_ids:
         collab_papers_query = select(Paper).where(
             Paper.id.in_(collab_paper_ids)
+        ).options(
+            selectinload(Paper.collaborators)
         )
 
         # Apply same filters to collaborative papers
@@ -163,7 +170,32 @@ async def get_papers(
 
     logger.info(f"✅ Returning {len(paginated_papers)} papers (total: {len(unique_papers)})")
 
-    return [PaperListResponse.model_validate(paper) for paper in paginated_papers]
+    # Convert to PaperListResponse with collaborator count
+    response_papers = []
+    for paper in paginated_papers:
+        # Count accepted collaborators
+        collab_count = len([c for c in (paper.collaborators or []) if c.status == "accepted"])
+
+        logger.info(f"📊 Paper '{paper.title[:30]}': {len(paper.collaborators or [])} total collabs, {collab_count} accepted")
+
+        paper_dict = {
+            "id": str(paper.id),
+            "title": paper.title,
+            "status": paper.status,
+            "progress": paper.progress,
+            "created_at": paper.created_at,
+            "updated_at": paper.updated_at,
+            "current_word_count": paper.current_word_count,
+            "target_word_count": paper.target_word_count,
+            "research_area": paper.research_area,
+            "tags": paper.tags or [],
+            "is_public": paper.is_public,
+            "deadline": paper.deadline,
+            "collaborator_count": collab_count
+        }
+        response_papers.append(PaperListResponse.model_validate(paper_dict))
+
+    return response_papers
 
 @router.get("/{paper_id}", response_model=PaperResponse)
 async def get_paper(
@@ -181,7 +213,31 @@ async def get_paper(
     if not paper.is_viewable_by(str(current_user.id)):
         raise AuthorizationException("You don't have permission to view this paper")
 
-    return PaperResponse.model_validate(paper)
+    # Build response with collaborator count
+    paper_dict = {
+        "id": str(paper.id),
+        "title": paper.title,
+        "status": paper.status,
+        "progress": paper.progress,
+        "created_at": paper.created_at,
+        "updated_at": paper.updated_at,
+        "current_word_count": paper.current_word_count,
+        "target_word_count": paper.target_word_count,
+        "research_area": paper.research_area,
+        "tags": paper.tags or [],
+        "is_public": paper.is_public,
+        "deadline": paper.deadline,
+        "collaborator_count": len([c for c in (paper.collaborators or []) if c.status == "accepted"]),
+        "abstract": paper.abstract,
+        "sections": paper.sections,
+        "owner_id": str(paper.owner_id),
+        "doi": paper.doi,
+        "journal": paper.journal,
+        "publication_date": paper.publication_date,
+        "citation_count": paper.citation_count or 0
+    }
+
+    return PaperResponse.model_validate(paper_dict)
 
 
 @router.patch("/{paper_id}", response_model=PaperResponse)
@@ -269,6 +325,21 @@ async def update_paper_section(
     paper = await paper_service.get_paper_by_id(db, paper_id)
     if not paper:
         raise NotFoundException("Paper")
+
+    # Check if user is a viewer
+    user_role = None
+    if str(paper.owner_id) == str(current_user.id):
+        user_role = "owner"
+    else:
+        for collab in paper.collaborators:
+            if str(collab.user_id) == str(current_user.id):
+                user_role = collab.role
+                break
+
+    if user_role == "viewer":
+        raise AuthorizationException(
+            "Viewers cannot edit paper content. Please contact the paper owner to upgrade your role to Editor or Co-author."
+        )
 
     if not paper.is_editable_by(str(current_user.id)):
         raise AuthorizationException("You don't have permission to edit this paper")

@@ -34,7 +34,7 @@ export interface Paper {
   progress: number;
   targetWordCount: number;
   currentWordCount: number;
-  coAuthors: string[];
+  collaboratorCount: number;
   researchArea: string;
   sections: PaperSection[];
   tags: string[];
@@ -44,6 +44,7 @@ export interface Paper {
   publicationDate?: Date;
   citationCount?: number;
   deadline?: Date;
+  ownerId?: string;  // Owner ID
 
   // ✅ NEW: AI Settings
   aiSettings?: PaperAISettings;  // Add this line

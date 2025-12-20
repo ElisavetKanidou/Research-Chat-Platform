@@ -291,13 +291,6 @@ async def add_friend_to_paper(
 
         db.add(collaboration)
 
-        # Update paper's co_authors list
-        if paper.co_authors is None:
-            paper.co_authors = []
-
-        if friend.name not in paper.co_authors:
-            paper.co_authors = list(paper.co_authors) + [friend.name]
-
         await db.commit()
         await db.refresh(collaboration)
 
@@ -564,13 +557,13 @@ async def remove_collaborator(
 @router.patch("/{collaboration_id}/role")
 async def change_collaborator_role(
         collaboration_id: str,
-        new_role: str = Body(..., embed=True),
+        role: str = Body(..., embed=True),
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)
 ):
     """Change collaborator role"""
 
-    logger.info(f"🔄 Changing role for collaborator {collaboration_id} to {new_role}")
+    logger.info(f"🔄 Changing role for collaborator {collaboration_id} to {role}")
 
     try:
         # Get collaboration
@@ -585,16 +578,25 @@ async def change_collaborator_role(
 
         # Validate role
         valid_roles = ['viewer', 'editor', 'co-author']
-        if new_role not in valid_roles:
+        if role not in valid_roles:
             raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {valid_roles}")
 
-        # Update role
-        collab.role = new_role
+        # Update role and permissions
+        collab.role = role
+        collab.can_edit = role in ['co-author', 'editor']
+        collab.can_comment = True
+        collab.can_invite_others = role == 'co-author'
+
         await db.commit()
+        await db.refresh(collab)
 
-        logger.info(f"✅ Changed role for collaborator {collaboration_id} to {new_role}")
+        logger.info(f"✅ Changed role for collaborator {collaboration_id} to {role}")
 
-        return {"success": True, "new_role": new_role}
+        return {
+            "success": True,
+            "new_role": role,
+            "collaboration_id": str(collab.id)
+        }
 
     except HTTPException:
         raise

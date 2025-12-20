@@ -1,7 +1,7 @@
 """
 Pydantic schemas for Reference Papers API
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
@@ -47,10 +47,30 @@ class ReferencePaperResponse(ReferencePaperBase):
     is_analyzed: bool
     analysis_date: Optional[str]
     writing_style_features: Optional[Dict[str, Any]]
-    metadata: Optional[Dict[str, Any]]
+    metadata: Optional[Dict[str, Any]] = None
     times_used: int
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode='before')
+    @classmethod
+    def extract_paper_metadata(cls, data: Any) -> Any:
+        """Extract paper_metadata from SQLAlchemy model and expose as metadata"""
+        if hasattr(data, 'paper_metadata'):
+            # It's a SQLAlchemy model object
+            if not hasattr(data, '__dict__'):
+                return data
+            data_dict = {}
+            for key in ['id', 'user_id', 'title', 'authors', 'year', 'journal', 'doi',
+                       'paper_type', 'research_area', 'keywords', 'file_url', 'file_size',
+                       'original_filename', 'is_analyzed', 'analysis_date',
+                       'writing_style_features', 'times_used', 'created_at', 'updated_at']:
+                if hasattr(data, key):
+                    data_dict[key] = getattr(data, key)
+            # Map paper_metadata to metadata
+            data_dict['metadata'] = getattr(data, 'paper_metadata', None) or {}
+            return data_dict
+        return data
 
     class Config:
         from_attributes = True

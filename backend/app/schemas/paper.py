@@ -70,7 +70,6 @@ class PaperBase(BaseModel):
     research_area: Optional[str] = Field(None, max_length=255)
     target_word_count: int = Field(default=8000, gt=0, le=100000)
     tags: Optional[List[str]] = []
-    co_authors: Optional[str] = []
     is_public: bool = False
 
     @field_validator('tags', mode='before')
@@ -80,15 +79,6 @@ class PaperBase(BaseModel):
             return []
         if isinstance(v, str):
             return [tag.strip() for tag in v.split(',') if tag.strip()]
-        return v
-
-    @field_validator('co_authors', mode='before')
-    @classmethod
-    def validate_co_authors(cls, v):
-        if v is None:
-            return []
-        if isinstance(v, str):
-            return [author.strip() for author in v.split(',') if author.strip()]
         return v
 
 
@@ -123,7 +113,6 @@ class PaperUpdate(BaseModel):
     research_area: Optional[str] = Field(None, max_length=255, alias='researchArea')  # ← ALIAS
     target_word_count: Optional[int] = Field(None, gt=0, le=100000, alias='targetWordCount')
     tags: Optional[List[str]] = None
-    co_authors: Optional[List[str]] = Field(None, alias='coAuthors')
     is_public: Optional[bool] = Field(None, alias='isPublic')
     progress: Optional[int] = Field(None, ge=0, le=100)
     current_word_count: Optional[int] = Field(None, ge=0, alias='currentWordCount')
@@ -146,15 +135,6 @@ class PaperUpdate(BaseModel):
             return [tag.strip() for tag in v.split(',') if tag.strip()]
         return v
 
-    @field_validator('co_authors', mode='before')
-    @classmethod
-    def validate_co_authors(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, str):
-            return [author.strip() for author in v.split(',') if author.strip()]
-        return v
-
 
 class PaperListResponse(BaseModel):
     """Lightweight response for paper lists"""
@@ -169,10 +149,10 @@ class PaperListResponse(BaseModel):
     current_word_count: int
     target_word_count: int
     research_area: Optional[str] = None  # Make optional
-    co_authors: List[str]
     tags: List[str]
     is_public: bool
     deadline: Optional[datetime] = None  # Deadline field
+    collaborator_count: int = 0  # Number of collaborators
 
     @field_validator('id', mode='before')
     @classmethod

@@ -93,11 +93,9 @@ const PapersManagement: React.FC<PapersManagementProps> = ({ onPaperSelect, onNe
     .filter(paper => {
       const title = paper.title || '';
       const researchArea = (paper as any).research_area || paper.researchArea || '';
-      const coAuthors = (paper as any).co_authors || paper.coAuthors || [];
-      
+
       const matchesSearch = title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          researchArea.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          coAuthors.some((author: string) => (author || '').toLowerCase().includes(searchTerm.toLowerCase()));
+                          researchArea.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesFilter = filterStatus === 'all' || paper.status === filterStatus;
       return matchesSearch && matchesFilter;
     })

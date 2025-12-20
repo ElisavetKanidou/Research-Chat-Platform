@@ -1,5 +1,6 @@
 // components/layout/MainLayout.tsx - COMPLETE WITH HEADER
 import React, { useState } from 'react';
+import { X } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import Dashboard from '../Dashboard';
@@ -7,12 +8,16 @@ import Analytics from '../Analytics';
 import SettingsPanel from '../SettingsPanel';
 import PaperWorkspace from '../PaperWorkspace';
 import ResearchChatPlatform from '../../paper/ResearchChatPlatform';
+import ReferencePapers from '../ReferencePapers';
+import UploadReferencePaperForm from '../UploadReferencePaperForm';
 import { useGlobalContext } from '../../contexts/GlobalContext';
 import type { Paper } from '../../types/paper';
 
 const MainLayout: React.FC = () => {
   const { activePaper, setActivePaper, user } = useGlobalContext();
   const [activeSection, setActiveSection] = useState<string>('dashboard');
+  const [showReferencePapers, setShowReferencePapers] = useState(false);
+  const [showUploadReferenceForm, setShowUploadReferenceForm] = useState(false);
 
   const handleSectionChange = (section: string) => {
     setActiveSection(section);
@@ -42,6 +47,8 @@ const MainLayout: React.FC = () => {
         return 'Dashboard';
       case 'papers':
         return 'Papers Management';
+      case 'reference-papers':
+        return 'Reference Papers';
       case 'chat':
         return 'AI Research Assistant';
       case 'analytics':
@@ -61,6 +68,8 @@ const MainLayout: React.FC = () => {
         return "Here's an overview of your research progress and activities";
       case 'papers':
         return 'Manage and organize your research papers';
+      case 'reference-papers':
+        return 'Manage papers used for AI writing style personalization';
       case 'chat':
         return activePaper ? `Working on: ${activePaper.title}` : 'Select a paper to start';
       case 'analytics':
@@ -76,12 +85,14 @@ const MainLayout: React.FC = () => {
     switch (activeSection) {
       case 'dashboard':
         return (
-          <Dashboard 
+          <Dashboard
             onPaperSelect={handlePaperSelect}
             onNewPaper={handleNewPaper}
+            onViewAnalytics={() => setActiveSection('analytics')}
+            onManageReferencePapers={() => setShowReferencePapers(true)}
           />
         );
-      
+
       case 'papers':
         return (
           <div className="flex-1 overflow-y-auto p-6">
@@ -90,7 +101,12 @@ const MainLayout: React.FC = () => {
             </div>
           </div>
         );
-      
+
+      case 'reference-papers':
+        return (
+          <ReferencePapers onUploadClick={() => setShowUploadReferenceForm(true)} />
+        );
+
       case 'chat':
         return activePaper ? (
           <ResearchChatPlatform paperContext={activePaper} />
@@ -110,13 +126,13 @@ const MainLayout: React.FC = () => {
             </div>
           </div>
         );
-      
+
       case 'analytics':
         return <Analytics />;
-      
+
       case 'settings':
         return <SettingsPanel />;
-      
+
       case 'workspace':
         return activePaper ? (
           <PaperWorkspace onClose={() => setActiveSection('papers')} />
@@ -128,12 +144,13 @@ const MainLayout: React.FC = () => {
             </div>
           </div>
         );
-      
+
       default:
         return (
-          <Dashboard 
+          <Dashboard
             onPaperSelect={handlePaperSelect}
             onNewPaper={handleNewPaper}
+            onViewAnalytics={() => setActiveSection('analytics')}
           />
         );
     }
@@ -148,21 +165,51 @@ const MainLayout: React.FC = () => {
         onNewPaper={handleNewPaper}
         onLogout={handleLogout}
       />
-      
+
       {/* Main Content with Header */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header with Notifications */}
-        <Header 
+        <Header
           title={getHeaderTitle()}
           subtitle={getHeaderSubtitle()}
           showSearch={activeSection !== 'workspace' && activeSection !== 'chat'}
         />
-        
+
         {/* Content Area */}
         <div className="flex-1 overflow-hidden">
           {renderContent()}
         </div>
       </div>
+
+      {/* Reference Papers Modal */}
+      {showReferencePapers && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-xl font-bold">Reference Papers</h2>
+              <button
+                onClick={() => setShowReferencePapers(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <ReferencePapers onUploadClick={() => setShowUploadReferenceForm(true)} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Reference Paper Modal */}
+      {showUploadReferenceForm && (
+        <UploadReferencePaperForm
+          onClose={() => setShowUploadReferenceForm(false)}
+          onSuccess={() => {
+            setShowUploadReferenceForm(false);
+          }}
+        />
+      )}
     </div>
   );
 };

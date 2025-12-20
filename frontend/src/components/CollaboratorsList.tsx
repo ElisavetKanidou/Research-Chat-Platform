@@ -26,6 +26,7 @@ const CollaboratorsList: React.FC<CollaboratorsListProps> = ({ paperId, compact 
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCollaborator, setSelectedCollaborator] = useState<string | null>(null);
+  const [showRoleChangeFor, setShowRoleChangeFor] = useState<string | null>(null);
 
   // Track presence for all collaborators
   const collaboratorIds = useMemo(() => collaborators.map(c => c.user_id), [collaborators]);
@@ -97,6 +98,48 @@ const CollaboratorsList: React.FC<CollaboratorsListProps> = ({ paperId, compact 
         type: 'error',
         title: 'Failed to Remove',
         message: 'Could not remove collaborator. Please try again.',
+      });
+    }
+  };
+
+  const handleChangeRole = async (collaboratorId: string, newRole: 'viewer' | 'editor' | 'co-author') => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/v1/collaborations/${collaboratorId}/role`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ role: newRole })
+        }
+      );
+
+      if (response.ok) {
+        // Update local state
+        setCollaborators(collaborators.map(c =>
+          c.id === collaboratorId ? { ...c, role: newRole } : c
+        ));
+        setShowRoleChangeFor(null);
+        setSelectedCollaborator(null);
+        addNotification({
+          type: 'success',
+          title: 'Role Updated',
+          message: `Collaborator role changed to ${newRole}`,
+          autoRemove: true,
+        });
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to update role');
+      }
+    } catch (error) {
+      console.error('Error changing role:', error);
+      addNotification({
+        type: 'error',
+        title: 'Failed to Change Role',
+        message: error instanceof Error ? error.message : 'Could not update role. Please try again.',
       });
     }
   };
@@ -234,26 +277,54 @@ const CollaboratorsList: React.FC<CollaboratorsListProps> = ({ paperId, compact 
 
                   {selectedCollaborator === collab.id && (
                     <div className="absolute right-0 mt-1 w-48 bg-white border rounded-lg shadow-lg z-10">
-                      <button
-                        onClick={() => {
-                          // Handle role change
-                          setSelectedCollaborator(null);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                      >
-                        <Edit size={14} />
-                        Change Role
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleRemoveCollaborator(collab.id);
-                          setSelectedCollaborator(null);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-t"
-                      >
-                        <Trash2 size={14} />
-                        Remove Access
-                      </button>
+                      {showRoleChangeFor === collab.id ? (
+                        <>
+                          <div className="px-4 py-2 text-xs font-medium text-gray-500 border-b">
+                            Select New Role
+                          </div>
+                          {(['viewer', 'editor', 'co-author'] as const).map((role) => (
+                            <button
+                              key={role}
+                              onClick={() => handleChangeRole(collab.id, role)}
+                              disabled={collab.role === role}
+                              className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${
+                                collab.role === role ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : ''
+                              }`}
+                            >
+                              <span className="capitalize">{role}</span>
+                              {collab.role === role && (
+                                <span className="text-xs text-gray-400">(Current)</span>
+                              )}
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => setShowRoleChangeFor(null)}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 border-t"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setShowRoleChangeFor(collab.id)}
+                            className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                          >
+                            <Edit size={14} />
+                            Change Role
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleRemoveCollaborator(collab.id);
+                              setSelectedCollaborator(null);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-t"
+                          >
+                            <Trash2 size={14} />
+                            Remove Access
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

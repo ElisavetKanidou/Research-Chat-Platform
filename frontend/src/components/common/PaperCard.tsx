@@ -1,9 +1,9 @@
 // components/common/PaperCard.tsx
 import React from 'react';
-import { FileText, Clock, Users, MoreVertical } from 'lucide-react';
+import { FileText, Clock, Users, MoreVertical, Calendar } from 'lucide-react';
 import type { Paper } from '../../types/paper';
 import { getStatusColor, formatTimeAgo } from '../../utils/statusHelpers';
-import { formatDate } from '../../utils/dateHelpers';
+import { formatDate, formatDateTime } from '../../utils/dateHelpers';
 
 interface PaperCardProps {
   paper: Paper;
@@ -121,26 +121,36 @@ export const PaperCard: React.FC<PaperCardProps> = ({
             <Clock size={14} />
             <span>Modified {formatTimeAgo(paper.lastModified)}</span>
           </div>
-          {paper.coAuthors.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Users size={14} />
-              <span>{paper.coAuthors.length} collaborator{paper.coAuthors.length > 1 ? 's' : ''}</span>
+          {paper.deadline && (
+            <div className="flex items-center gap-2 text-orange-600">
+              <Calendar size={14} />
+              <span>Due {formatDateTime(paper.deadline)}</span>
             </div>
           )}
-        </div>
+          {(() => {
+            const paperObj = paper as any;
+            console.log('PaperCard data:', {
+              title: paper.title,
+              collaborator_count: paperObj.collaborator_count,
+              collaboratorCount: paper.collaboratorCount,
+              collaborators: paperObj.collaborators,
+              allKeys: Object.keys(paperObj)
+            });
 
-        {paper.coAuthors.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-4">
-            {paper.coAuthors.slice(0, 3).map((author, index) => (
-              <span key={index} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                {author}
-              </span>
-            ))}
-            {paper.coAuthors.length > 3 && (
-              <span className="text-xs text-gray-500">+{paper.coAuthors.length - 3} more</span>
-            )}
-          </div>
-        )}
+            // Use nullish coalescing to check all possible sources
+            const collabCount = paperObj.collaborator_count ?? paper.collaboratorCount ?? (Array.isArray(paperObj.collaborators) ? paperObj.collaborators.length : 0);
+
+            if (collabCount > 0) {
+              return (
+                <div className="flex items-center gap-2">
+                  <Users size={14} />
+                  <span>{collabCount} collaborator{collabCount > 1 ? 's' : ''}</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
+        </div>
 
         <div className="pt-4 border-t">
           <button
@@ -206,12 +216,35 @@ export const PaperCard: React.FC<PaperCardProps> = ({
             <Clock size={14} />
             <span>Modified {formatTimeAgo(paper.lastModified)}</span>
           </div>
-          {paper.coAuthors.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Users size={14} />
-              <span>{paper.coAuthors.length} collaborator{paper.coAuthors.length > 1 ? 's' : ''}</span>
+          {paper.deadline && (
+            <div className="flex items-center gap-2 text-orange-600">
+              <Calendar size={14} />
+              <span>Due {formatDateTime(paper.deadline)}</span>
             </div>
           )}
+          {(() => {
+            const paperObj = paper as any;
+            console.log('PaperCard data:', {
+              title: paper.title,
+              collaborator_count: paperObj.collaborator_count,
+              collaboratorCount: paper.collaboratorCount,
+              collaborators: paperObj.collaborators,
+              allKeys: Object.keys(paperObj)
+            });
+
+            // Use nullish coalescing to check all possible sources
+            const collabCount = paperObj.collaborator_count ?? paper.collaboratorCount ?? (Array.isArray(paperObj.collaborators) ? paperObj.collaborators.length : 0);
+
+            if (collabCount > 0) {
+              return (
+                <div className="flex items-center gap-2">
+                  <Users size={14} />
+                  <span>{collabCount} collaborator{collabCount > 1 ? 's' : ''}</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
 
         <div className="mt-4 pt-4 border-t">

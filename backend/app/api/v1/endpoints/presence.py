@@ -1,7 +1,7 @@
 """
 Presence API endpoints for user online status
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Body, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict
 from app.database.session import get_db
@@ -50,14 +50,23 @@ async def get_user_status(
 
 @router.post("/bulk-status")
 async def get_bulk_status(
-    user_ids: List[str],
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Get presence status for multiple users at once
     Used by CollaboratorsList, Dashboard, etc.
+
+    Accepts: ["user_id_1", "user_id_2", ...] as JSON array in request body
     """
+    # Parse the raw JSON array from request body
+    user_ids = await request.json()
+
+    # Handle empty array
+    if not user_ids:
+        return {}
+
     statuses = await presence_service.get_online_users(db, user_ids)
 
     result = {}

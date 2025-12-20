@@ -382,17 +382,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const title = paper.title || '';
         const abstract = paper.abstract || '';
         const researchArea = (paper as any).research_area || paper.researchArea || '';
-        const coAuthors = (paper as any).co_authors || paper.coAuthors || [];
-        
+
         const query = searchQuery.toLowerCase();
-        
+
         return (
           title.toLowerCase().includes(query) ||
           abstract.toLowerCase().includes(query) ||
-          researchArea.toLowerCase().includes(query) ||
-          coAuthors.some((author: string) => 
-            (author || '').toLowerCase().includes(query)
-          )
+          researchArea.toLowerCase().includes(query)
         );
       });
       setSearchResults(results);

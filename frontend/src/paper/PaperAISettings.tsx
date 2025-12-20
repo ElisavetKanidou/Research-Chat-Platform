@@ -15,7 +15,6 @@ interface AISettings {
   writingStyle: 'academic' | 'concise' | 'detailed' | 'collaborative';
   contextDepth: 'minimal' | 'moderate' | 'comprehensive';
   researchFocus: string[];
-  suggestionsEnabled: boolean;
 }
 
 const PaperAISettings: React.FC<PaperAISettingsProps> = ({ paperId }) => {
@@ -30,7 +29,6 @@ const PaperAISettings: React.FC<PaperAISettingsProps> = ({ paperId }) => {
     writingStyle: 'academic',
     contextDepth: 'moderate',
     researchFocus: [],
-    suggestionsEnabled: true,
   });
 
   useEffect(() => {
@@ -56,7 +54,6 @@ const PaperAISettings: React.FC<PaperAISettingsProps> = ({ paperId }) => {
         contextDepth: settingsData.contextDepth ?? 'moderate',
         // ✅ FIXED: Ensure researchFocus is always an array
         researchFocus: Array.isArray(settingsData.researchFocus) ? settingsData.researchFocus : [],
-        suggestionsEnabled: settingsData.suggestionsEnabled ?? true,
       });
       
       console.log('✅ Settings loaded successfully');
@@ -86,7 +83,6 @@ const PaperAISettings: React.FC<PaperAISettingsProps> = ({ paperId }) => {
         writingStyle: settings.writingStyle,
         contextDepth: settings.contextDepth,
         researchFocus: settings.researchFocus, // ✅ Explicitly send array
-        suggestionsEnabled: settings.suggestionsEnabled,
       };
       
       console.log('📤 Sending to backend:', settingsToSave);
@@ -286,25 +282,6 @@ const PaperAISettings: React.FC<PaperAISettingsProps> = ({ paperId }) => {
         <p className="text-xs text-gray-500 mt-2">
           Specify research areas for paper-specific AI guidance (e.g., "quantum computing", "machine learning")
         </p>
-      </div>
-
-      {/* AI Suggestions */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">AI Suggestions</h3>
-            <p className="text-sm text-gray-600">Enable real-time AI suggestions while writing</p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.suggestionsEnabled}
-              onChange={(e) => updateSetting('suggestionsEnabled', e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-          </label>
-        </div>
       </div>
     </div>
   );

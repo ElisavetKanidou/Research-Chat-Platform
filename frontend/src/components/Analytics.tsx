@@ -62,7 +62,7 @@ const Analytics: React.FC = () => {
     publishedPapers: safePapers.filter(p => p.status === 'published').length,
     inProgressPapers: safePapers.filter(p => ['draft', 'in-progress', 'in-review', 'revision'].includes(p.status)).length,
     totalWords: safePapers.reduce((sum, p) => ((p as any).current_word_count || p.currentWordCount || 0) + sum, 0),
-    totalCollaborators: [...new Set(safePapers.flatMap(p => (p as any).co_authors || p.coAuthors || []))].length,
+    totalCollaborators: safePapers.reduce((sum, p) => sum + ((p as any).collaborator_count || p.collaboratorCount || 0), 0),
     researchAreas: [...new Set(safePapers.map(p => (p as any).research_area || p.researchArea).filter(Boolean))].length,
     avgProgress: safePapers.length > 0 ? Math.round(safePapers.reduce((sum, p) => sum + p.progress, 0) / safePapers.length) : 0,
     completionRate: safePapers.length > 0 ? Math.round((safePapers.filter(p => p.status === 'published').length / safePapers.length) * 100) : 0
@@ -531,10 +531,10 @@ const Analytics: React.FC = () => {
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-500">
                     <span>Published {paper.lastModified.toLocaleDateString()}</span>
-                    {((paper as any).co_authors || paper.coAuthors || []).length > 0 && (
+                    {((paper as any).collaborator_count || paper.collaboratorCount || 0) > 0 && (
                       <>
                         <span>•</span>
-                        <span>{((paper as any).co_authors || paper.coAuthors).length} co-author{((paper as any).co_authors || paper.coAuthors).length > 1 ? 's' : ''}</span>
+                        <span>{(paper as any).collaborator_count || paper.collaboratorCount} collaborator{((paper as any).collaborator_count || paper.collaboratorCount) > 1 ? 's' : ''}</span>
                       </>
                     )}
                   </div>

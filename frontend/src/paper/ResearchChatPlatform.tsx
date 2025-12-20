@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Download, Settings, Loader, CheckCircle, XCircle, Plus, ChevronDown, Paperclip, X, FileText } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
+import { paperService } from '../services/paperService';
 import type { Paper } from '../types/paper';
 import type { ChatMessageRequest, ChatMessageResponse, ChatAttachment } from '../types/api';
 
@@ -47,6 +48,9 @@ interface PersonalizationSettings {
   labLevel: number;
   personalLevel: number;
   globalLevel: number;
+  writingStyle?: 'academic' | 'concise' | 'detailed' | 'collaborative';
+  contextDepth?: 'minimal' | 'moderate' | 'comprehensive';
+  researchFocus?: string[];
 }
 
 interface ResearchChatPlatformProps {
@@ -98,7 +102,10 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({
   const [personalization, setPersonalization] = useState<PersonalizationSettings>({
     labLevel: user?.preferences?.aiPersonalization?.labLevel || 7,
     personalLevel: user?.preferences?.aiPersonalization?.personalLevel || 8,
-    globalLevel: user?.preferences?.aiPersonalization?.globalLevel || 5
+    globalLevel: user?.preferences?.aiPersonalization?.globalLevel || 5,
+    writingStyle: user?.preferences?.aiPersonalization?.writingStyle || 'academic',
+    contextDepth: user?.preferences?.aiPersonalization?.contextDepth || 'moderate',
+    researchFocus: user?.preferences?.aiPersonalization?.researchFocus || []
   });
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -109,6 +116,67 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // ✅ Update welcome message when personalization settings change
+  useEffect(() => {
+    if (messages.length > 0 && messages[0].id === 'welcome') {
+      const updatedWelcome = createWelcomeMessage();
+      // Only update if content has changed
+      if (messages[0].content !== updatedWelcome.content) {
+        setMessages(prev => [updatedWelcome, ...prev.slice(1)]);
+      }
+    }
+  }, [personalization.labLevel, personalization.personalLevel, personalization.globalLevel]);
+
+  // ✅ NEW: Load paper-specific AI settings when paper changes
+  useEffect(() => {
+    const loadPaperAISettings = async () => {
+      if (!paperContext?.id) {
+        // No paper context - use global settings from user
+        console.log('📊 No paper context, using global settings from user');
+        setPersonalization({
+          labLevel: user?.preferences?.aiPersonalization?.labLevel || 7,
+          personalLevel: user?.preferences?.aiPersonalization?.personalLevel || 8,
+          globalLevel: user?.preferences?.aiPersonalization?.globalLevel || 5,
+          writingStyle: user?.preferences?.aiPersonalization?.writingStyle || 'academic',
+          contextDepth: user?.preferences?.aiPersonalization?.contextDepth || 'moderate',
+          researchFocus: user?.preferences?.aiPersonalization?.researchFocus || []
+        });
+        return;
+      }
+
+      try {
+        console.log('📥 Loading paper-specific AI settings for paper:', paperContext.id);
+        const response = await paperService.getPaperAISettings(paperContext.id);
+        const settingsData = response.settings;
+
+        const newSettings = {
+          labLevel: settingsData?.labLevel ?? user?.preferences?.aiPersonalization?.labLevel ?? 7,
+          personalLevel: settingsData?.personalLevel ?? user?.preferences?.aiPersonalization?.personalLevel ?? 8,
+          globalLevel: settingsData?.globalLevel ?? user?.preferences?.aiPersonalization?.globalLevel ?? 5,
+          writingStyle: settingsData?.writingStyle ?? user?.preferences?.aiPersonalization?.writingStyle ?? 'academic',
+          contextDepth: settingsData?.contextDepth ?? user?.preferences?.aiPersonalization?.contextDepth ?? 'moderate',
+          researchFocus: settingsData?.researchFocus ?? user?.preferences?.aiPersonalization?.researchFocus ?? []
+        };
+
+        console.log('✅ Loaded paper-specific settings:', newSettings);
+        setPersonalization(newSettings);
+      } catch (error) {
+        console.error('❌ Failed to load paper AI settings, using global:', error);
+        // Fallback to global settings
+        setPersonalization({
+          labLevel: user?.preferences?.aiPersonalization?.labLevel || 7,
+          personalLevel: user?.preferences?.aiPersonalization?.personalLevel || 8,
+          globalLevel: user?.preferences?.aiPersonalization?.globalLevel || 5,
+          writingStyle: user?.preferences?.aiPersonalization?.writingStyle || 'academic',
+          contextDepth: user?.preferences?.aiPersonalization?.contextDepth || 'moderate',
+          researchFocus: user?.preferences?.aiPersonalization?.researchFocus || []
+        });
+      }
+    };
+
+    loadPaperAISettings();
+  }, [paperContext?.id, user?.preferences?.aiPersonalization]);
 
   // Load chat history on mount and when paper changes
   useEffect(() => {
@@ -172,9 +240,9 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({
     content: `Welcome to ResearchChat-AI! I'm your personalized research assistant. I can help you develop research ideas, find related papers, identify gaps, and guide you through the entire paper writing process.
 
 Current personalization settings:
-- Lab papers influence: ${personalization.labLevel}/10
-- Your personal papers influence: ${personalization.personalLevel}/10  
-- Global literature influence: ${personalization.globalLevel}/10
+- Lab papers influence: ${personalization.labLevel || 7}/10
+- Your personal papers influence: ${personalization.personalLevel || 8}/10
+- Global literature influence: ${personalization.globalLevel || 5}/10
 
 ${paperContext ? `Currently working on: "${paperContext.title}"` : 'No active paper selected.'}
 
@@ -324,6 +392,30 @@ What research idea would you like to explore today?`,
     setUploadedFiles([]);
     setIsLoading(true);
 
+    // ✅ NEW: Reload paper-specific settings before sending message to ensure we use latest values
+    let currentPersonalization = { ...personalization };
+    if (paperContext?.id) {
+      try {
+        console.log('🔄 Reloading paper-specific AI settings before sending message...');
+        const response = await paperService.getPaperAISettings(paperContext.id);
+        const settingsData = response.settings;
+
+        currentPersonalization = {
+          labLevel: settingsData?.labLevel ?? user?.preferences?.aiPersonalization?.labLevel ?? 7,
+          personalLevel: settingsData?.personalLevel ?? user?.preferences?.aiPersonalization?.personalLevel ?? 8,
+          globalLevel: settingsData?.globalLevel ?? user?.preferences?.aiPersonalization?.globalLevel ?? 5,
+          writingStyle: settingsData?.writingStyle ?? user?.preferences?.aiPersonalization?.writingStyle ?? 'academic',
+          contextDepth: settingsData?.contextDepth ?? user?.preferences?.aiPersonalization?.contextDepth ?? 'moderate',
+          researchFocus: settingsData?.researchFocus ?? user?.preferences?.aiPersonalization?.researchFocus ?? []
+        };
+
+        console.log('✅ Using latest settings for this message:', currentPersonalization);
+        setPersonalization(currentPersonalization);
+      } catch (error) {
+        console.warn('⚠️ Failed to reload settings, using cached:', error);
+      }
+    }
+
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       type: 'user',
@@ -358,17 +450,19 @@ What research idea would you like to explore today?`,
             progress: paperContext.progress,
             research_area: paperContext.researchArea || '',
             abstract: paperContext.abstract || '',
-            co_authors: paperContext.coAuthors || [],
             current_word_count: paperContext.currentWordCount || 0,
             target_word_count: paperContext.targetWordCount || 8000,
           }));
         }
 
-        // Add personalization settings as JSON string
+        // Add personalization settings as JSON string (using fresh values)
         formData.append('personalization_settings', JSON.stringify({
-          lab_level: personalization.labLevel,
-          personal_level: personalization.personalLevel,
-          global_level: personalization.globalLevel,
+          lab_level: currentPersonalization.labLevel,
+          personal_level: currentPersonalization.personalLevel,
+          global_level: currentPersonalization.globalLevel,
+          writing_style: currentPersonalization.writingStyle || 'academic',
+          context_depth: currentPersonalization.contextDepth || 'moderate',
+          research_focus: currentPersonalization.researchFocus || [],
         }));
 
         const token = getAuthToken();
@@ -383,7 +477,7 @@ What research idea would you like to explore today?`,
           body: formData,
         });
       } else {
-        // Use JSON for text-only messages
+        // Use JSON for text-only messages (using fresh values)
         const requestBody = {
           content: messageContent,
           model: selectedModel,
@@ -394,14 +488,16 @@ What research idea would you like to explore today?`,
             progress: paperContext.progress,
             research_area: paperContext.researchArea || '',
             abstract: paperContext.abstract || '',
-            co_authors: paperContext.coAuthors || [],
             current_word_count: paperContext.currentWordCount || 0,
             target_word_count: paperContext.targetWordCount || 8000,
           } : null,
           personalization_settings: {
-            lab_level: personalization.labLevel,
-            personal_level: personalization.personalLevel,
-            global_level: personalization.globalLevel,
+            lab_level: currentPersonalization.labLevel,
+            personal_level: currentPersonalization.personalLevel,
+            global_level: currentPersonalization.globalLevel,
+            writing_style: currentPersonalization.writingStyle || 'academic',
+            context_depth: currentPersonalization.contextDepth || 'moderate',
+            research_focus: currentPersonalization.researchFocus || [],
           }
         };
 
@@ -554,7 +650,8 @@ What research idea would you like to explore today?`,
     }
   };
 
-  const handleConfirmation = (messageId: string, approved: boolean) => {
+  const handleConfirmation = async (messageId: string, approved: boolean) => {
+    // Update UI immediately
     setMessages(prev =>
       prev.map(msg =>
         msg.id === messageId
@@ -563,6 +660,53 @@ What research idea would you like to explore today?`,
       )
     );
 
+    // Send feedback to backend
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        console.warn('⚠️ No auth token - feedback not saved to backend');
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/chat/feedback`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          message_id: messageId,
+          helpful: approved
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Feedback saved to backend:', result);
+
+        addNotification({
+          type: 'success',
+          title: 'Feedback Recorded',
+          message: approved ? 'Message marked as helpful' : 'Message marked as needing adjustment'
+        });
+      } else {
+        const errorText = await response.text();
+        console.error('❌ Failed to save feedback:', errorText);
+
+        addNotification({
+          type: 'warning',
+          title: 'Feedback Not Saved',
+          message: 'Your feedback was not saved to the server, but the UI has been updated.'
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error saving feedback:', error);
+
+      addNotification({
+        type: 'warning',
+        title: 'Feedback Not Saved',
+        message: 'Could not save feedback to server.'
+      });
+    }
+
+    // Show follow-up message
     const followUpMessage: Message = {
       id: `followup-${Date.now()}`,
       type: 'assistant',

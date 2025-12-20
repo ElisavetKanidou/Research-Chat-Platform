@@ -39,7 +39,7 @@ export const usePaperManagement = () => {
         progress: 0,
         targetWordCount: paperData.targetWordCount || 8000,
         currentWordCount: 0,
-        coAuthors: paperData.coAuthors || [],
+        collaboratorCount: 0,
         researchArea: paperData.researchArea || '',
         sections: [
           { id: '1', title: 'Introduction', content: '', status: 'not-started', lastModified: new Date(), wordCount: 0, order: 1 },

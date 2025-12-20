@@ -6,12 +6,13 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, extract
+from sqlalchemy.orm import selectinload
 from datetime import datetime, timedelta
 
 from app.api.v1.endpoints.auth import get_current_user
 from app.database.session import get_db
 from app.models.user import User
-from app.models.paper import Paper, PaperStatus
+from app.models.paper import Paper, PaperStatus, PaperCollaborator
 from app.services.analytics_service import analytics_service
 
 router = APIRouter()
@@ -206,33 +207,50 @@ async def get_collaboration_analytics(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)
 ):
-    """Get collaboration analytics"""
+    """Get collaboration analytics based on real paper collaborations"""
 
-    # Get all papers with their co-authors
-    papers_query = select(Paper).where(Paper.owner_id == current_user.id)
+    # Get all papers with their collaborators (from paper_collaborators table)
+    # Load collaborators and their user info
+    papers_query = select(Paper).where(Paper.owner_id == current_user.id).options(
+        selectinload(Paper.collaborators).selectinload(PaperCollaborator.user)
+    )
     result = await db.execute(papers_query)
     papers = result.scalars().all()
 
-    all_coauthors = []
+    # Collect all collaborators with their user info
+    collaborator_papers = {}  # {user_id: {"name": str, "email": str, "papers": int}}
+    collaborative_paper_count = 0
+
     for paper in papers:
-        if paper.co_authors:
-            all_coauthors.extend(paper.co_authors)
+        if paper.collaborators:
+            collaborative_paper_count += 1
+            for collab in paper.collaborators:
+                user_id = str(collab.user_id)
+                if user_id not in collaborator_papers:
+                    # Get user info from the collaboration
+                    collaborator_papers[user_id] = {
+                        "name": collab.user.name if collab.user else "Unknown",
+                        "email": collab.user.email if collab.user else "",
+                        "papers": 0
+                    }
+                collaborator_papers[user_id]["papers"] += 1
 
-    # Count unique collaborators
-    unique_coauthors = len(set(all_coauthors))
+    # Sort by number of papers and get top 10
+    top_collaborators = sorted(
+        [
+            {"name": data["name"], "papers": data["papers"]}
+            for data in collaborator_papers.values()
+        ],
+        key=lambda x: x["papers"],
+        reverse=True
+    )[:10]
 
-    # Most frequent collaborators
-    from collections import Counter
-    coauthor_counts = Counter(all_coauthors)
-    top_collaborators = [
-        {"name": name, "papers": count}
-        for name, count in coauthor_counts.most_common(10)
-    ]
+    solo_papers = len(papers) - collaborative_paper_count
 
     return {
-        "total_collaborators": unique_coauthors,
-        "collaborative_papers": len([p for p in papers if p.co_authors]),
-        "solo_papers": len([p for p in papers if not p.co_authors]),
+        "total_collaborators": len(collaborator_papers),
+        "collaborative_papers": collaborative_paper_count,
+        "solo_papers": solo_papers,
         "top_collaborators": top_collaborators
     }
 

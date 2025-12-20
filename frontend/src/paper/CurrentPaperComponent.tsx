@@ -1,6 +1,6 @@
 // components/paper/CurrentPaperComponent.tsx - FINAL VERSION (NO DUPLICATE ABSTRACT)
 import React, { useState, useEffect, useRef } from 'react';
-import { FileText, Save, Download, Edit3, Calendar, Users, Target, UserPlus, X, Check, Loader, ChevronDown } from 'lucide-react';
+import { FileText, Save, Download, Edit3, Calendar, Users, Target, UserPlus, X, Check, Loader, ChevronDown, AlertCircle } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import type { PaperSection } from '../types/paper';
 import { paperService } from '../services/paperService';
@@ -23,7 +23,7 @@ interface EditingSectionState {
 }
 
 const CurrentPaperComponent: React.FC = () => {
-  const { activePaper, updatePaper, addNotification, refreshActivePaper, refreshPapers } = useGlobalContext();
+  const { activePaper, updatePaper, addNotification, refreshActivePaper, refreshPapers, user } = useGlobalContext();
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(activePaper?.title || '');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
@@ -36,11 +36,49 @@ const CurrentPaperComponent: React.FC = () => {
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+  // ✅ User role for this paper
+  const [userRole, setUserRole] = useState<'viewer' | 'editor' | 'co-author' | 'owner' | null>(null);
+
   // Refs for dropdown
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
   // ✅ Editing state for sections
   const [editingSection, setEditingSection] = useState<EditingSectionState | null>(null);
+
+  // ✅ Fetch user role for this paper
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      if (!activePaper?.id || !user?.id) {
+        setUserRole('owner'); // Default to owner if no collaboration data
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(
+          `http://127.0.0.1:8000/api/v1/collaborations/paper/${activePaper.id}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const currentUser = data.collaborators.find((c: any) => c.user_id === user.id);
+          setUserRole(currentUser?.role || 'owner');
+        } else {
+          setUserRole('owner'); // Default to owner if fetch fails
+        }
+      } catch (error) {
+        console.error('Failed to fetch user role:', error);
+        setUserRole('owner'); // Default to owner on error
+      }
+    };
+
+    fetchUserRole();
+  }, [activePaper?.id, user?.id]);
 
   // Close export dropdown when clicking outside
   useEffect(() => {
@@ -88,10 +126,6 @@ const CurrentPaperComponent: React.FC = () => {
     return (activePaper as any).research_area || activePaper.researchArea || '';
   };
 
-  const getCoAuthors = (): string[] => {
-    return (activePaper as any).co_authors || activePaper.coAuthors || [];
-  };
-
   const getSections = (): PaperSection[] => {
     return activePaper.sections || [];
   };
@@ -100,7 +134,6 @@ const CurrentPaperComponent: React.FC = () => {
   const currentWordCount = getCurrentWordCount();
   const targetWordCount = getTargetWordCount();
   const researchArea = getResearchArea();
-  const coAuthors = getCoAuthors();
   const sections = getSections();
 
   const getStatusColor = (status: string) => {
@@ -168,6 +201,16 @@ const CurrentPaperComponent: React.FC = () => {
 
   // ✅ Start editing a section
   const startEditingSection = (section: PaperSection) => {
+    // Check if user has permission to edit
+    if (userRole === 'viewer') {
+      addNotification({
+        type: 'error',
+        title: 'Permission Denied',
+        message: 'Viewers cannot edit paper content. Please contact the paper owner to upgrade your role.',
+      });
+      return;
+    }
+
     setEditingSection({
       sectionId: section.id,
       content: section.content || '',
@@ -184,6 +227,17 @@ const CurrentPaperComponent: React.FC = () => {
   // ✅ Save section content
   const saveSectionContent = async () => {
     if (!editingSection) return;
+
+    // Check viewer permission before attempting save
+    if (userRole === 'viewer') {
+      addNotification({
+        type: 'warning',
+        title: 'Permission Denied',
+        message: 'Viewers cannot save changes. Please contact the paper owner to upgrade your role to Editor or Co-author.',
+      });
+      setEditingSection(null);
+      return;
+    }
 
     // Don't save if content hasn't changed
     if (editingSection.content === editingSection.originalContent) {
@@ -211,12 +265,23 @@ const CurrentPaperComponent: React.FC = () => {
       setEditingSection(null);
     } catch (error) {
       console.error('Failed to save section:', error);
-      addNotification({
-        type: 'error',
-        title: 'Save Failed',
-        message: 'Failed to save section content',
-      });
-      
+
+      // Check if it's a 403 permission error
+      const errorMessage = error instanceof Error ? error.message : '';
+      if (errorMessage.includes('403') || errorMessage.includes('permission')) {
+        addNotification({
+          type: 'warning',
+          title: 'Permission Denied',
+          message: 'You do not have permission to edit this paper. Contact the paper owner.',
+        });
+      } else {
+        addNotification({
+          type: 'error',
+          title: 'Save Failed',
+          message: 'Failed to save section content. Please try again.',
+        });
+      }
+
       setEditingSection(prev => prev ? { ...prev, isSaving: false } : null);
     }
   };
@@ -230,14 +295,6 @@ const CurrentPaperComponent: React.FC = () => {
     }
   };
 
-  const removeCoAuthor = async (index: number) => {
-    try {
-      const newCoAuthors = coAuthors.filter((_, i) => i !== index);
-      await updatePaper(activePaper.id, { coAuthors: newCoAuthors });
-    } catch (error) {
-      console.error('Failed to remove co-author:', error);
-    }
-  };
 
   const exportPaper = async (format: 'pdf' | 'word' | 'latex') => {
     if (!activePaper?.id) return;
@@ -649,8 +706,13 @@ const CurrentPaperComponent: React.FC = () => {
                                 e.stopPropagation();
                                 startEditingSection(section);
                               }}
-                              className="p-2 hover:bg-blue-50 rounded-lg transition-colors text-blue-600 hover:text-blue-700"
-                              title="Edit section content"
+                              disabled={userRole === 'viewer'}
+                              className={`p-2 rounded-lg transition-colors ${
+                                userRole === 'viewer'
+                                  ? 'text-gray-400 cursor-not-allowed'
+                                  : 'hover:bg-blue-50 text-blue-600 hover:text-blue-700'
+                              }`}
+                              title={userRole === 'viewer' ? 'Viewers cannot edit content' : 'Edit section content'}
                             >
                               <Edit3 size={16} />
                             </button>
@@ -664,6 +726,16 @@ const CurrentPaperComponent: React.FC = () => {
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-3">
                             {/* Left Column: Editor */}
                             <div className="space-y-3">
+                              {userRole === 'viewer' && (
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                                  <div className="flex items-center gap-2 text-yellow-800">
+                                    <AlertCircle size={16} />
+                                    <p className="text-sm font-medium">
+                                      You are viewing this content as a Viewer. You cannot make changes.
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
                               <label className="block text-sm font-medium text-gray-700">
                                 Section Content
                               </label>
@@ -673,8 +745,15 @@ const CurrentPaperComponent: React.FC = () => {
                                   prev ? { ...prev, content: e.target.value } : null
                                 )}
                                 disabled={editingSection.isSaving}
-                                className="w-full h-96 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                placeholder={`Write your ${section.title.toLowerCase()} here...`}
+                                readOnly={userRole === 'viewer'}
+                                className={`w-full h-96 p-3 border rounded-lg focus:outline-none resize-none ${
+                                  userRole === 'viewer'
+                                    ? 'bg-gray-50 border-gray-200 cursor-not-allowed text-gray-600'
+                                    : editingSection.isSaving
+                                    ? 'bg-gray-100 border-gray-300 cursor-not-allowed'
+                                    : 'border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                                }`}
+                                placeholder={userRole === 'viewer' ? 'Viewers cannot edit content' : `Write your ${section.title.toLowerCase()} here...`}
                               />
                               <div className="text-xs text-gray-500">
                                 {editingSection.content.trim().split(/\s+/).filter(Boolean).length} words
@@ -692,8 +771,9 @@ const CurrentPaperComponent: React.FC = () => {
                                 </button>
                                 <button
                                   onClick={saveSectionContent}
-                                  disabled={editingSection.isSaving || editingSection.content === editingSection.originalContent}
+                                  disabled={userRole === 'viewer' || editingSection.isSaving || editingSection.content === editingSection.originalContent}
                                   className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={userRole === 'viewer' ? 'Viewers cannot save changes' : ''}
                                 >
                                   {editingSection.isSaving ? (
                                     <>
@@ -824,24 +904,6 @@ const CurrentPaperComponent: React.FC = () => {
             
             <div className="mt-2 text-xs text-gray-500">
               Press Enter to add • Type to search existing users
-            </div>
-            
-            {/* Existing Co-authors List */}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {coAuthors.map((author, index) => (
-                <span
-                  key={index}
-                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-1"
-                >
-                  {author}
-                  <button
-                    onClick={() => removeCoAuthor(index)}
-                    className="text-blue-500 hover:text-blue-700"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
             </div>
           </div>
         </div>

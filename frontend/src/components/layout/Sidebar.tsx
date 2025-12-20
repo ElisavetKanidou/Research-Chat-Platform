@@ -1,6 +1,6 @@
 // components/layout/Sidebar.tsx - WITH NOTIFICATION BELL
 import React from 'react';
-import { Home, FileText, MessageSquare, BarChart3, Settings, Plus, LogOut, User } from 'lucide-react';
+import { Home, FileText, BarChart3, Settings, Plus, LogOut, User } from 'lucide-react';
 import { useGlobalContext } from '../../contexts/GlobalContext';
 import NotificationBell from './NotificationBell';
 
@@ -22,7 +22,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navigationItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'papers', label: 'Papers Management', icon: FileText, badge: papers.length },
-    { id: 'chat', label: 'AI Research Assistant', icon: MessageSquare },
     { id: 'analytics', label: 'Analytics & Insights', icon: BarChart3 },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];

@@ -63,9 +63,9 @@ class ChatAttachmentResponse(ChatAttachmentBase):
 
 # Personalization Settings Schemas
 class PersonalizationSettingsBase(BaseModel):
-    lab_level: int = Field(default=3, ge=1, le=5)
-    personal_level: int = Field(default=2, ge=1, le=5)
-    global_level: int = Field(default=1, ge=1, le=5)
+    lab_level: int = Field(default=7, ge=1, le=10)
+    personal_level: int = Field(default=8, ge=1, le=10)
+    global_level: int = Field(default=5, ge=1, le=10)
     writing_style: WritingStyle = WritingStyle.ACADEMIC
     context_depth: ContextDepth = ContextDepth.MODERATE
     research_focus: List[str] = []
@@ -73,9 +73,9 @@ class PersonalizationSettingsBase(BaseModel):
 
 
 class PersonalizationSettingsUpdate(BaseModel):
-    lab_level: Optional[int] = Field(None, ge=1, le=5)
-    personal_level: Optional[int] = Field(None, ge=1, le=5)
-    global_level: Optional[int] = Field(None, ge=1, le=5)
+    lab_level: Optional[int] = Field(None, ge=1, le=10)
+    personal_level: Optional[int] = Field(None, ge=1, le=10)
+    global_level: Optional[int] = Field(None, ge=1, le=10)
     writing_style: Optional[WritingStyle] = None
     context_depth: Optional[ContextDepth] = None
     research_focus: Optional[List[str]] = None
@@ -746,5 +746,31 @@ class GetAllSectionsResponse(BaseModel):
                 ],
                 "totalWordCount": 650,
                 "paperProgress": 25
+            }
+        }
+
+# Message Feedback Schemas
+class MessageFeedbackRequest(BaseModel):
+    """Request schema for submitting user feedback on a message"""
+    message_id: str = Field(..., description="ID of the message to give feedback on", min_length=1)
+    helpful: bool = Field(..., description="True if helpful, False if not helpful")
+
+
+class MessageFeedbackResponse(BaseModel):
+    """Response schema after submitting feedback"""
+    success: bool
+    message: str
+    message_id: str
+    feedback: bool
+    feedback_timestamp: str
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "success": True,
+                "message": "Feedback recorded successfully",
+                "message_id": "msg-12345",
+                "feedback": True,
+                "feedback_timestamp": "2025-12-16T10:30:00Z"
             }
         }

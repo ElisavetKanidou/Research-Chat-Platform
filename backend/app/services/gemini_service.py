@@ -20,9 +20,9 @@ class GeminiService:
             api_key = getattr(settings, 'GEMINI_API_KEY', None)
             if api_key:
                 genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel('gemini-2.5-pro')
+                self.model = genai.GenerativeModel('gemini-2.5-flash')
                 self.enabled = True
-                logger.info("✅ Gemini service initialized successfully")
+                logger.info("✅ Gemini service initialized successfully with gemini-2.5-flash")
             else:
                 self.enabled = False
                 logger.warning("⚠️ GEMINI_API_KEY not found - Gemini service disabled")
@@ -103,7 +103,6 @@ WRITING STYLE PREFERENCES:
                         reference_papers_info += f"  • {paper.get('title', 'Untitled')}\n"
 
                 reference_papers_info += "\n💡 INSTRUCTION: Adapt your responses based on these reference papers' writing styles according to the personalization levels above.\n"
-"""
 
         # Build paper context
         paper_info = ""

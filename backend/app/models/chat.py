@@ -43,6 +43,10 @@ class ChatMessage(BaseModel):
     needs_confirmation = Column(Boolean, default=False, nullable=False)
     confirmed = Column(Boolean, default=False, nullable=False)
 
+    # User feedback
+    user_feedback = Column(Boolean, nullable=True)  # True=helpful, False=not helpful, None=no feedback
+    feedback_timestamp = Column(DateTime, nullable=True)
+
     # Metadata (renamed from 'metadata' to avoid SQLAlchemy conflict)
     message_metadata = Column(JSON, nullable=True, default={})  # sources, confidence, reasoning steps
 
