@@ -14,10 +14,10 @@ interface PaperCardProps {
   className?: string;
 }
 
-export const PaperCard: React.FC<PaperCardProps> = ({ 
-  paper, 
-  onClick, 
-  onMenuClick, 
+export const PaperCard: React.FC<PaperCardProps> = ({
+  paper,
+  onClick,
+  onMenuClick,
   showMenu = true,
   variant = 'default',
   className = ''
@@ -34,7 +34,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({
   };
 
   const renderCompactCard = () => (
-    <div 
+    <div
       className={`bg-white rounded-lg shadow-sm border hover:shadow-md transition-all cursor-pointer p-4 ${className}`}
       onClick={handleCardClick}
     >
@@ -43,11 +43,24 @@ export const PaperCard: React.FC<PaperCardProps> = ({
           <h3 className="text-sm font-semibold text-gray-900 truncate">
             {paper.title}
           </h3>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
             <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(paper.status)}`}>
               {paper.status.replace('-', ' ')}
             </span>
             <span className="text-xs text-gray-500">{paper.progress}%</span>
+            {(() => {
+              const paperObj = paper as any;
+              const collabCount = paperObj.collaborator_count ?? paper.collaboratorCount ?? 0;
+              if (collabCount > 0) {
+                return (
+                  <span className="text-xs text-gray-500 flex items-center gap-1">
+                    <Users size={12} />
+                    {collabCount}
+                  </span>
+                );
+              }
+              return null;
+            })()}
           </div>
         </div>
         {showMenu && (
@@ -129,16 +142,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({
           )}
           {(() => {
             const paperObj = paper as any;
-            console.log('PaperCard data:', {
-              title: paper.title,
-              collaborator_count: paperObj.collaborator_count,
-              collaboratorCount: paper.collaboratorCount,
-              collaborators: paperObj.collaborators,
-              allKeys: Object.keys(paperObj)
-            });
-
-            // Use nullish coalescing to check all possible sources
-            const collabCount = paperObj.collaborator_count ?? paper.collaboratorCount ?? (Array.isArray(paperObj.collaborators) ? paperObj.collaborators.length : 0);
+            const collabCount = paperObj.collaborator_count ?? paperObj.collaboratorCount ?? 0;
 
             if (collabCount > 0) {
               return (
@@ -224,16 +228,7 @@ export const PaperCard: React.FC<PaperCardProps> = ({
           )}
           {(() => {
             const paperObj = paper as any;
-            console.log('PaperCard data:', {
-              title: paper.title,
-              collaborator_count: paperObj.collaborator_count,
-              collaboratorCount: paper.collaboratorCount,
-              collaborators: paperObj.collaborators,
-              allKeys: Object.keys(paperObj)
-            });
-
-            // Use nullish coalescing to check all possible sources
-            const collabCount = paperObj.collaborator_count ?? paper.collaboratorCount ?? (Array.isArray(paperObj.collaborators) ? paperObj.collaborators.length : 0);
+            const collabCount = paperObj.collaborator_count ?? paperObj.collaboratorCount ?? 0;
 
             if (collabCount > 0) {
               return (

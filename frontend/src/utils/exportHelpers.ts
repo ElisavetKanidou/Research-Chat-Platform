@@ -60,7 +60,7 @@ const generateLaTeXContent = (paper: any): string => {
 \\usepackage{amssymb}
 
 \\title{${paper.title || 'Untitled Paper'}}
-\\author{${paper.coAuthors ? paper.coAuthors.join(' \\and ') : 'Author'}}
+\\author{Author}
 \\date{\\today}
 
 \\begin{document}

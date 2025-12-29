@@ -170,10 +170,9 @@ export const usePaperManagement = () => {
     researchAreaFilter: string = 'all'
   ): Paper[] => {
     return papers.filter(paper => {
-      const matchesSearch = searchTerm === '' || 
+      const matchesSearch = searchTerm === '' ||
         paper.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        paper.researchArea.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        paper.coAuthors.some(author => author.toLowerCase().includes(searchTerm.toLowerCase()));
+        paper.researchArea.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesStatus = statusFilter === 'all' || paper.status === statusFilter;
       const matchesResearchArea = researchAreaFilter === 'all' || paper.researchArea === researchAreaFilter;
@@ -190,7 +189,7 @@ export const usePaperManagement = () => {
     const inProgressPapers = papers.filter(p => ['in-progress', 'in-review', 'revision'].includes(p.status)).length;
     const totalWords = papers.reduce((sum, p) => sum + (p.currentWordCount || 0), 0);
     const avgProgress = totalPapers > 0 ? Math.round(papers.reduce((sum, p) => sum + p.progress, 0) / totalPapers) : 0;
-    const totalCollaborators = new Set(papers.flatMap(p => p.coAuthors)).size;
+    const totalCollaborators = papers.reduce((sum, p) => sum + ((p as any).collaborator_count ?? p.collaboratorCount ?? 0), 0);
     const researchAreas = new Set(papers.map(p => p.researchArea).filter(Boolean)).size;
 
     return {

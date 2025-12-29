@@ -1,6 +1,6 @@
 // components/Analytics.tsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Users, BookOpen, Award, Calendar, FileText, Clock, Target, Download } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, BookOpen, Award, Calendar, FileText, Clock, Target, Download, RefreshCw } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import { analyticsService } from '../services/analyticsService';
 import type { AnalyticsOverview, ProductivityAnalytics, CollaborationAnalytics, ResearchImpact } from '../services/analyticsService';
@@ -17,30 +17,50 @@ const Analytics: React.FC = () => {
   const [researchImpact, setResearchImpact] = useState<ResearchImpact | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // Load analytics data
+  // Load analytics data on mount and when papers change
   useEffect(() => {
     loadAnalytics();
+  }, [papers]); // Refresh when papers change
+
+  // Auto-refresh every 30 seconds while on Analytics page
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadAnalytics();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   const loadAnalytics = async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
+      console.log('📊 Loading analytics from backend...');
+
       const [overviewData, productivityData, collaborationData, impactData] = await Promise.all([
         analyticsService.getOverview(),
         analyticsService.getProductivity(6),
         analyticsService.getCollaboration(),
         analyticsService.getResearchImpact()
       ]);
-      
+
+      console.log('✅ Analytics loaded:', {
+        overview: overviewData,
+        productivity: productivityData,
+        collaboration: collaborationData,
+        impact: impactData
+      });
+
       setOverview(overviewData);
       setProductivity(productivityData);
       setCollaboration(collaborationData);
       setResearchImpact(impactData);
+      setLastUpdated(new Date());
     } catch (err) {
-      console.error('Failed to load analytics:', err);
+      console.error('❌ Failed to load analytics:', err);
       setError('Failed to load analytics data. Using local data.');
     } finally {
       setLoading(false);
@@ -76,9 +96,17 @@ const Analytics: React.FC = () => {
     totalWords: overview.total_words,
     avgProgress: overview.average_progress,
     totalCollaborators: collaboration?.total_collaborators || localStats.totalCollaborators,
-    researchAreas: researchImpact?.research_areas.length || localStats.researchAreas,
+    researchAreas: researchImpact?.research_areas?.length || localStats.researchAreas,
     completionRate: overview.total_papers > 0 ? Math.round((overview.published_papers / overview.total_papers) * 100) : 0
   } : localStats;
+
+  // Debug logging
+  console.log('📈 Stats being used:', {
+    source: overview ? 'BACKEND' : 'LOCAL',
+    stats,
+    overview,
+    localStats
+  });
 
   const exportAnalytics = () => {
     const data = {
@@ -111,7 +139,7 @@ const Analytics: React.FC = () => {
 
   const OverviewTab = () => {
     // Research areas from backend or local
-    const researchAreasData = researchImpact?.research_areas.reduce((acc, item) => {
+    const researchAreasData = researchImpact?.research_areas?.reduce((acc, item) => {
       acc[item.area] = item.papers;
       return acc;
     }, {} as Record<string, number>) || safePapers.reduce((acc, paper) => {
@@ -158,7 +186,7 @@ const Analytics: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Words</p>
-                <p className="text-2xl lg:text-3xl font-bold text-green-600">{stats.totalWords.toLocaleString()}</p>
+                <p className="text-2xl lg:text-3xl font-bold text-green-600">{(stats.totalWords || 0).toLocaleString()}</p>
               </div>
               <div className="p-2 lg:p-3 bg-green-100 rounded-full">
                 <BookOpen className="text-green-600" size={20} />
@@ -336,13 +364,13 @@ const Analytics: React.FC = () => {
               <Clock size={18} className="text-gray-400" />
             </div>
             <div className="text-2xl font-bold text-blue-600">
-              {writingVelocity.words_per_week.toLocaleString()}
+              {(writingVelocity?.words_per_week || 0).toLocaleString()}
             </div>
             <div className="text-sm text-gray-600">words/week average</div>
-            {writingVelocity.change_from_last_month !== 0 && (
+            {writingVelocity?.change_from_last_month !== 0 && (
               <div className="mt-3 flex items-center text-sm text-green-600">
                 <TrendingUp size={14} className="mr-1" />
-                <span>+{writingVelocity.change_from_last_month}% from last month</span>
+                <span>+{writingVelocity?.change_from_last_month}% from last month</span>
               </div>
             )}
           </div>
@@ -527,7 +555,7 @@ const Analytics: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <h4 className="font-medium text-gray-900 truncate">{paper.title}</h4>
                   <p className="text-sm text-gray-600 mt-1">
-                    {(paper as any).research_area || paper.researchArea} • {((paper as any).current_word_count || paper.currentWordCount).toLocaleString()} words
+                    {(paper as any).research_area || paper.researchArea} • {((paper as any).current_word_count || paper.currentWordCount || 0).toLocaleString()} words
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-gray-500">
                     <span>Published {paper.lastModified.toLocaleDateString()}</span>
@@ -561,14 +589,30 @@ const Analytics: React.FC = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Analytics & Insights</h1>
               <p className="text-gray-600">Track your research progress and discover patterns</p>
+              {lastUpdated && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </p>
+              )}
             </div>
-            <button
-              onClick={exportAnalytics}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto justify-center"
-            >
-              <Download size={18} />
-              Export Report
-            </button>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                onClick={loadAnalytics}
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex-1 sm:flex-initial justify-center disabled:opacity-50"
+                title="Refresh analytics data"
+              >
+                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+              <button
+                onClick={exportAnalytics}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex-1 sm:flex-initial justify-center"
+              >
+                <Download size={18} />
+                Export Report
+              </button>
+            </div>
           </div>
 
           {/* Tab Navigation */}

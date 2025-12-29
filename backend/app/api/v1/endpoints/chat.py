@@ -40,6 +40,7 @@ from app.services.paper_service import paper_service
 from app.services.section_content_service import section_content_service
 from app.services.gemini_service import gemini_service
 from app.services.openai_service import openai_service
+from app.services.gpt_oss_service import gpt_oss_service
 from app.services.file_comparison_service import file_comparison_service
 from app.core.exceptions import (
     NotFoundException, ValidationException,
@@ -428,6 +429,78 @@ async def send_chat_message(
                         personalization_settings=personalization_dict,
                         db=db
                     )
+            elif message_request.model == 'gpt-oss-120b':
+                # User selected GPT-OSS 120B Local Model
+                if gpt_oss_service.enabled:
+                    logger.info("🚀 Using GPT-OSS 120B (user selected)")
+                    try:
+                        # Prepare paper context for GPT-OSS
+                        paper_ctx = None
+                        if paper:
+                            paper_ctx = {
+                                'title': paper.title,
+                                'research_area': paper.research_area or '',
+                                'status': paper.status.value if hasattr(paper.status, 'value') else str(paper.status),
+                                'progress': paper.progress,
+                                'current_word_count': paper.current_word_count,
+                                'target_word_count': paper.target_word_count,
+                            }
+
+                        # Get personalization settings - prefer request over database
+                        personalization = None
+                        if message_request.personalization_settings:
+                            personalization = {
+                                'lab_level': message_request.personalization_settings.lab_level,
+                                'personal_level': message_request.personalization_settings.personal_level,
+                                'global_level': message_request.personalization_settings.global_level
+                            }
+                            logger.info(f"📊 Using personalization from request: {personalization}")
+                        else:
+                            personalization = get_user_personalization_settings(current_user)
+                            logger.info(f"📊 Using personalization from database: {personalization}")
+
+                        # Fetch user's reference papers for style analysis
+                        reference_papers = await get_user_reference_papers(db, current_user.id)
+
+                        # Generate response with GPT-OSS
+                        gpt_oss_response = await gpt_oss_service.generate_response(
+                            message=message_request.content,
+                            files_content=[],
+                            personalization=personalization,
+                            paper_context=paper_ctx,
+                            reference_papers=reference_papers
+                        )
+
+                        # Create response wrapper
+                        class GPTOSSResponseWrapper:
+                            def __init__(self, gpt_oss_data):
+                                self.messageId = gpt_oss_data.get('id', f"msg-gpt-oss-{int(time.time())}")
+                                self.responseContent = gpt_oss_data.get('response', '')
+                                self.createdAt = datetime.fromtimestamp(gpt_oss_data.get('created', time.time())).isoformat()
+                                self.needsConfirmation = False
+                                self.attachments = []
+                                self.suggestions = []
+                                self.metadata = {
+                                    'model': gpt_oss_data.get('model', 'gpt-oss:120b'),
+                                    'finish_reason': gpt_oss_data.get('finish_reason', 'stop')
+                                }
+
+                        ai_response = GPTOSSResponseWrapper(gpt_oss_response)
+
+                    except Exception as e:
+                        logger.error(f"❌ GPT-OSS error: {str(e)}")
+                        raise AIServiceException(f"GPT-OSS service error: {str(e)}")
+                else:
+                    logger.warning("⚠️ GPT-OSS selected but not enabled, falling back to Groq")
+                    personalization_dict = get_personalization_settings(message_request, current_user)
+                    ai_response = await ai_service.process_chat_message(
+                        user=current_user,
+                        message=message_request.content,
+                        paper_context=paper,
+                        user_papers_context=message_request.user_papers_context,
+                        personalization_settings=personalization_dict,
+                        db=db
+                    )
             else:
                 # Default fallback to Groq
                 logger.info(f"🤖 Using Groq/Llama (fallback for model: {message_request.model})")
@@ -766,6 +839,93 @@ async def send_chat_message_with_files(
                 else:
                     logger.warning("⚠️ OpenAI selected but not enabled, falling back to Groq")
                     # Fallback to Groq
+                    enhanced_content = content if content else "I've uploaded some files for you to analyze."
+                    enhanced_content += "\n\n--- Uploaded Files ---\n"
+
+                    for file_info in file_contents:
+                        enhanced_content += f"\n**File: {file_info['filename']}** ({file_info['size'] / 1024:.1f} KB)\n"
+                        enhanced_content += f"Content:\n{file_info['content'][:5000]}\n"
+                        if len(file_info['content']) > 5000:
+                            enhanced_content += f"... (truncated, total length: {len(file_info['content'])} characters)\n"
+
+                    if comparison_summary:
+                        enhanced_content += f"\n\n{comparison_summary}"
+
+                    ai_response = await ai_service.process_chat_message(
+                        user=current_user,
+                        message=enhanced_content,
+                        paper_context=paper,
+                        user_papers_context=None,
+                        personalization_settings=personalization,
+                        db=db
+                    )
+            elif model == 'gpt-oss-120b':
+                # User selected GPT-OSS 120B Local Model
+                if gpt_oss_service.enabled:
+                    logger.info("🚀 Using GPT-OSS 120B for file upload (user selected)")
+                    try:
+                        # Prepare paper context for GPT-OSS
+                        paper_ctx = None
+                        if paper:
+                            paper_ctx = {
+                                'title': paper.title,
+                                'research_area': paper.research_area or '',
+                                'status': paper.status.value if hasattr(paper.status, 'value') else str(paper.status),
+                                'progress': paper.progress,
+                                'current_word_count': paper.current_word_count,
+                                'target_word_count': paper.target_word_count,
+                            }
+
+                        # Get personalization - prefer from form data over DB
+                        personalization_dict = None
+                        if personalization_settings_json:
+                            personalization_dict = personalization_settings_json
+                            logger.info(f"📊 Using personalization from request: {personalization_dict}")
+                        else:
+                            personalization_dict = get_user_personalization_settings(current_user)
+                            logger.info(f"📊 Using personalization from database: {personalization_dict}")
+
+                        # Fetch user's reference papers for style analysis
+                        reference_papers = await get_user_reference_papers(db, current_user.id)
+
+                        # Prepare message with file context
+                        user_message_with_comparison = content if content else "I've uploaded files for analysis."
+                        if comparison_summary:
+                            user_message_with_comparison += f"\n\n{comparison_summary}"
+
+                        # Generate response with GPT-OSS
+                        gpt_oss_response = await gpt_oss_service.generate_response(
+                            message=user_message_with_comparison,
+                            files_content=file_contents,
+                            personalization=personalization_dict,
+                            paper_context=paper_ctx,
+                            reference_papers=reference_papers
+                        )
+
+                        # Create response object
+                        class GPTOSSResponseWrapper:
+                            def __init__(self, gpt_oss_data):
+                                self.messageId = gpt_oss_data.get('id', f"msg-gpt-oss-{int(time.time())}")
+                                self.responseContent = gpt_oss_data.get('response', '')
+                                self.createdAt = datetime.fromtimestamp(gpt_oss_data.get('created', time.time())).isoformat()
+                                self.needsConfirmation = False
+                                self.attachments = []
+                                self.suggestions = []
+                                self.metadata = {
+                                    'model': gpt_oss_data.get('model', 'gpt-oss:120b'),
+                                    'finish_reason': gpt_oss_data.get('finish_reason', 'stop'),
+                                    'files_analyzed': len(file_contents)
+                                }
+                                if comparison_summary:
+                                    self.metadata['file_comparison'] = comparison_summary
+
+                        ai_response = GPTOSSResponseWrapper(gpt_oss_response)
+
+                    except Exception as e:
+                        logger.error(f"❌ GPT-OSS file upload error: {str(e)}")
+                        raise AIServiceException(f"GPT-OSS service error: {str(e)}")
+                else:
+                    logger.warning("⚠️ GPT-OSS selected but not enabled, falling back to Groq")
                     enhanced_content = content if content else "I've uploaded some files for you to analyze."
                     enhanced_content += "\n\n--- Uploaded Files ---\n"
 

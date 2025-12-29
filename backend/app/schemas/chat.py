@@ -132,7 +132,7 @@ class ChatMessageRequest(BaseModel):
     user_papers_context: Optional[List[UserPaperContextItem]] = None
     personalization_settings: Optional[PersonalizationSettingsBase] = None
     attachments: Optional[List[ChatAttachmentCreate]] = []
-    model: Optional[str] = Field(default='gemini', description="AI model to use: 'gemini', 'groq', 'gpt-3.5', or 'gpt-4'")
+    model: Optional[str] = Field(default='gemini', description="AI model to use: 'gemini', 'groq', 'gpt-3.5', 'gpt-4', or 'gpt-oss-120b'")
 
 class ChatMessageResponse(BaseModel):
     messageId: str = Field(..., alias="message_id")

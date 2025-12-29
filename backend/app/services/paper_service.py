@@ -37,7 +37,6 @@ class PaperService:
             research_area=paper_data.research_area,
             target_word_count=paper_data.target_word_count,
             tags=paper_data.tags or [],
-            co_authors=paper_data.co_authors or [],
             is_public=paper_data.is_public,
             owner_id=user_id
         )
@@ -217,7 +216,6 @@ class PaperService:
             research_area=original.research_area,
             target_word_count=original.target_word_count,
             tags=original.tags.copy() if original.tags else [],
-            co_authors=original.co_authors.copy() if original.co_authors else [],
             is_public=False,  # Duplicates start as private
             owner_id=new_owner_id
         )

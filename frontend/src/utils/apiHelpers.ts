@@ -46,7 +46,7 @@ export class ApiClient {
   private timeout: number;
 
   constructor(config: Partial<ApiConfig> = {}) {
-    this.baseUrl = config.baseURL || 'http://127.0.0.1:8000/api/v1';
+    this.baseUrl = config.baseURL || 'http://localhost:8000/api/v1';
     this.timeout = config.timeout || 10000;
     this.defaultHeaders = {
       'Content-Type': 'application/json',
@@ -77,7 +77,7 @@ export class ApiClient {
     if (contentType && contentType.includes('application/json')) {
       return response.json();
     }
-    
+
     return response.text() as unknown as T;
   }
   private async request<T>(method: string, endpoint: string, data?: any): Promise<T> {

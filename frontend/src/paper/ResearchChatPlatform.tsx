@@ -109,7 +109,7 @@ const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({
   });
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<'gemini' | 'groq' | 'gpt-3.5' | 'gpt-4'>('gemini');
+  const [selectedModel, setSelectedModel] = useState<'gemini' | 'groq' | 'gpt-3.5' | 'gpt-4' | 'gpt-oss-120b'>('gemini');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -913,7 +913,7 @@ What research idea would you like to explore today?`,
           {/* AI Model Selection */}
           <select
             value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value as 'gemini' | 'groq' | 'gpt-3.5' | 'gpt-4')}
+            onChange={(e) => setSelectedModel(e.target.value as 'gemini' | 'groq' | 'gpt-3.5' | 'gpt-4' | 'gpt-oss-120b')}
             className="text-sm px-3 py-1 border border-gray-300 rounded bg-white hover:bg-gray-50 cursor-pointer"
             title="Select AI Model"
           >
@@ -921,6 +921,7 @@ What research idea would you like to explore today?`,
             <option value="groq">⚡ Groq Llama (FREE, Ultra Fast)</option>
             <option value="gpt-3.5">💬 GPT-3.5 (Balanced)</option>
             <option value="gpt-4">🧠 GPT-4 (Best Quality)</option>
+            <option value="gpt-oss-120b">🚀 GPT-OSS 120B (Local)</option>
           </select>
 
           {/* Settings button */}

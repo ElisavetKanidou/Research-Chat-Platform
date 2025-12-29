@@ -32,7 +32,7 @@ export interface CreatePaperRequest {
   abstract?: string;
   researchArea?: string;
   targetWordCount?: number;
-  coAuthors?: string[];
+  collaboratorCount?: number;
   tags?: string[];
   isPublic?: boolean;
 }
@@ -42,7 +42,7 @@ export interface UpdatePaperRequest {
   abstract?: string;
   researchArea?: string;
   targetWordCount?: number;
-  coAuthors?: string[];
+  collaboratorCount?: number;
   tags?: string[];
   isPublic?: boolean;
   status?: string;
@@ -58,7 +58,7 @@ export interface PaperResponse {
   progress: number;
   targetWordCount: number;
   currentWordCount: number;
-  coAuthors: string[];
+  collaboratorCount: number;
   researchArea: string;
   sections: SectionResponse[];
   tags: string[];
@@ -86,7 +86,7 @@ export interface ChatMessageRequest {
     progress: number;
     researchArea: string;
     abstract: string;
-    coAuthors: string[];
+    collaboratorCount: number;
     currentWordCount: number;
     targetWordCount: number;
   };

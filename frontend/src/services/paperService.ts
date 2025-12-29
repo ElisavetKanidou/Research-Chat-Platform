@@ -210,7 +210,7 @@ class PaperService {
         progress: 75,
         targetWordCount: 8000,
         currentWordCount: 4500,
-        coAuthors: ['Dr. Smith', 'Dr. Johnson'],
+        collaboratorCount: 2,
         researchArea: 'Healthcare AI',
         sections: [
           { id: '1', title: 'Introduction', content: 'Healthcare AI introduction...', status: 'completed', lastModified: new Date(), wordCount: 800, order: 1 },
@@ -233,7 +233,7 @@ class PaperService {
         progress: 30,
         targetWordCount: 6000,
         currentWordCount: 1200,
-        coAuthors: ['Dr. Brown'],
+        collaboratorCount: 1,
         researchArea: 'Natural Language Processing',
         sections: [
           { id: '1', title: 'Introduction', content: 'NLP in clinical settings...', status: 'completed', lastModified: new Date(), wordCount: 600, order: 1 },
@@ -256,7 +256,7 @@ class PaperService {
         progress: 100,
         targetWordCount: 9000,
         currentWordCount: 8200,
-        coAuthors: ['Dr. Wilson', 'Dr. Lee'],
+        collaboratorCount: 2,
         researchArea: 'Medical Imaging',
         sections: [
           { id: '1', title: 'Introduction', content: 'Deep learning in medical imaging...', status: 'completed', lastModified: new Date(), wordCount: 1000, order: 1 },

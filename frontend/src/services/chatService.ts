@@ -39,7 +39,7 @@ export interface ChatRequest {
     progress: number;
     researchArea: string;
     abstract: string;
-    coAuthors: string[];
+    collaboratorCount: number;
     currentWordCount: number;
     targetWordCount: number;
   };
