@@ -2,8 +2,8 @@
 import React from 'react';
 import { FileText, Clock, Users, MoreVertical, Calendar } from 'lucide-react';
 import type { Paper } from '../../types/paper';
-import { getStatusColor, formatTimeAgo } from '../../utils/statusHelpers';
-import { formatDate, formatDateTime } from '../../utils/dateHelpers';
+import { getStatusColor } from '../../utils/statusHelpers';
+import { formatDate, formatDateTime, formatTimeAgo } from '../../utils/dateHelpers';
 
 interface PaperCardProps {
   paper: Paper;

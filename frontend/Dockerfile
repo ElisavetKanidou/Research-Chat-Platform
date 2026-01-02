@@ -9,7 +9,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (including devDependencies for build)
-RUN npm ci && npm cache clean --force
+RUN npm ci && npm install -D @types/node && npm cache clean --force
 
 # Copy source code
 COPY . .

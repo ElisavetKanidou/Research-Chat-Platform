@@ -30,7 +30,7 @@ services:
       - "8080:8080"  # Using port 8080 to avoid conflicts
     environment:
       # Database
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-research_chat}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-research_chat}
       
       # API Configuration
       API_V1_PREFIX: /api/v1

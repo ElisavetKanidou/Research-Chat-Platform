@@ -73,11 +73,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         // Add new notification to the list
         const newNotification: Notification = {
           id: lastMessage.data?.notification_id || `ws-${Date.now()}`, // ✅ Use DB ID from backend
+          user_id: lastMessage.data?.user_id || '', // User ID from WebSocket
           type: lastMessage.notification_type,
           title: lastMessage.title,
           message: lastMessage.message,
           is_read: false,
           created_at: lastMessage.timestamp,
+          updated_at: lastMessage.timestamp,
           data: lastMessage.data
         };
 

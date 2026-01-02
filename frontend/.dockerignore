@@ -30,7 +30,6 @@ README.md
 __tests__/
 coverage/
 
-# Config files (keep only necessary ones)
+# Linting config (not needed for build)
 .eslintrc*
 .prettierrc*
-tsconfig.json

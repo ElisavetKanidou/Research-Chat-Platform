@@ -15,6 +15,7 @@ export interface Notification {
   is_read: boolean;
   created_at: string;
   updated_at: string;
+  data?: any; // Additional notification data
 }
 
 export interface NotificationContextType {

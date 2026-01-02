@@ -299,9 +299,9 @@ const ReferencePapers: React.FC<ReferencePapersProps> = ({ onUploadClick, refres
                           {getPaperTypeLabel(paper.paper_type)}
                         </span>
                         {paper.is_analyzed ? (
-                          <CheckCircle className="w-4 h-4 text-green-600" title="Analyzed" />
+                          <span title="Analyzed"><CheckCircle className="w-4 h-4 text-green-600" /></span>
                         ) : (
-                          <XCircle className="w-4 h-4 text-gray-400" title="Not analyzed" />
+                          <span title="Not analyzed"><XCircle className="w-4 h-4 text-gray-400" /></span>
                         )}
                       </div>
                       <h3 className="font-semibold text-gray-900 line-clamp-2" title={paper.title}>
