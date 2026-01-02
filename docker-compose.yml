@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: research-chat-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-research_chat}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - research-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: research-chat-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"  # Using port 8080 to avoid conflicts
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-research_chat}
+      
+      # API Configuration
+      API_V1_PREFIX: /api/v1
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-this-in-production}
+      
+      # CORS
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      
+      # AI Services
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GPT_OSS_API_KEY: ${GPT_OSS_API_KEY:-}
+      GPT_OSS_BASE_URL: ${GPT_OSS_BASE_URL:-}
+      
+      # Email Service
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-onboarding@resend.dev}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Research Platform}
+      
+      # OAuth Integrations
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      DROPBOX_APP_KEY: ${DROPBOX_APP_KEY:-}
+      DROPBOX_APP_SECRET: ${DROPBOX_APP_SECRET:-}
+      MENDELEY_CLIENT_ID: ${MENDELEY_CLIENT_ID:-}
+      MENDELEY_CLIENT_SECRET: ${MENDELEY_CLIENT_SECRET:-}
+      
+      # Frontend URL for OAuth redirects
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - research-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}
+    container_name: research-chat-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"  # Using port 3000 to avoid conflicts
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - research-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  research-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
