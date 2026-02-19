@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { Paper, PaperSection  } from '../types/paper';
 import { paperService } from '../services/paperService';
+import { generateUUID } from '../utils/uuid';
 
 export const usePaperManagement = () => {
   const [papers, setPapers] = useState<Paper[]>([]);
@@ -30,7 +31,7 @@ export const usePaperManagement = () => {
     setError(null);
     try {
       const newPaper: Paper = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         title: paperData.title || 'Untitled Research Paper',
         abstract: paperData.abstract || '',
         status: 'draft',

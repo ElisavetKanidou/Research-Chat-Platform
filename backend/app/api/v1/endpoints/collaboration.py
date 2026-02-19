@@ -118,42 +118,59 @@ async def send_invitations(
                     errors.append(f"{invite.email}: Already a collaborator on this paper")
                     continue
 
-            # Create invitation
-            invitation = CollaborationInvite(
-                email=invite.email,
-                role=CollaborationRole(invite.role),
-                message=invite.message,
-                status=InvitationStatus.PENDING,
-                paper_id=UUID(request.paper_id) if request.paper_id else None,
-                invited_by_id=current_user.id,
-                invited_user_id=existing_user.id if existing_user else None,
-                expires_at=datetime.utcnow() + timedelta(days=7),
-                token=secrets.token_urlsafe(32)
-            )
+            # ✅ AUTO-ACCEPT: If user exists, create collaboration directly
+            if existing_user and request.paper_id:
+                # Create PaperCollaborator directly (auto-accept)
+                collaboration = PaperCollaborator(
+                    paper_id=UUID(request.paper_id),
+                    user_id=existing_user.id,
+                    invited_by_id=current_user.id,
+                    role=invite.role,
+                    status="accepted",
+                    can_edit=invite.role in ['co-author', 'editor'],
+                    can_comment=True,
+                    can_invite_others=invite.role == 'co-author',
+                    created_at=datetime.utcnow()
+                )
+                db.add(collaboration)
 
-            db.add(invitation)
-
-            # CREATE NOTIFICATION if user exists
-            if existing_user:
+                # Send collaborator_added notification
                 from app.api.v1.endpoints.notifications import create_notification
                 from app.models.notification import NotificationType
 
                 await create_notification(
                     db=db,
                     user_id=str(existing_user.id),
-                    type=NotificationType.COLLABORATION_INVITE,
-                    title="New Collaboration Invitation",
-                    message=f"{current_user.name} invited you to collaborate on {request.paper_title or 'a paper'}",
-                    link=f"/papers/{request.paper_id}" if request.paper_id else None
+                    type=NotificationType.COLLABORATOR_ADDED,
+                    title="Added as Collaborator",
+                    message=f"{current_user.name} added you as {invite.role} on '{paper.title}'",
+                    link=f"/papers/{request.paper_id}"
                 )
+
+                logger.info(f"✅ Auto-accepted: Added {invite.email} as {invite.role}")
+            else:
+                # User doesn't exist - create invitation for later
+                invitation = CollaborationInvite(
+                    email=invite.email,
+                    role=CollaborationRole(invite.role),
+                    message=invite.message,
+                    status=InvitationStatus.PENDING,
+                    paper_id=UUID(request.paper_id) if request.paper_id else None,
+                    invited_by_id=current_user.id,
+                    invited_user_id=None,
+                    expires_at=datetime.utcnow() + timedelta(days=7),
+                    token=secrets.token_urlsafe(32)
+                )
+                db.add(invitation)
+
+                logger.info(f"✅ Created invitation for {invite.email} (user not in system)")
 
             sent_invites.append({
                 "email": invite.email,
                 "role": invite.role,
-                "existing_user": existing_user is not None
+                "existing_user": existing_user is not None,
+                "auto_accepted": existing_user is not None and request.paper_id is not None
             })
-
-            logger.info(f"✅ Created invitation for {invite.email} as {invite.role}")
 
             # TODO: Send email notification
             # await send_invitation_email(invitation, request.paper_title)

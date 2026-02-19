@@ -1,4 +1,5 @@
 // utils/apiHelpers.ts
+import { getApiBaseUrl } from '../config/api';
 
 export interface ApiResponse<T> {
   data: T;
@@ -41,12 +42,13 @@ export class ApiError extends Error {
 }
 
 export class ApiClient {
-  private baseUrl: string;
+  private baseUrl!: string;
   private defaultHeaders: HeadersInit;
   private timeout: number;
 
   constructor(config: Partial<ApiConfig> = {}) {
-    this.baseUrl = config.baseURL || 'http://localhost:8000/api/v1';
+    // Use centralized API URL configuration
+    this.baseUrl = config.baseURL || getApiBaseUrl();
     this.timeout = config.timeout || 10000;
     this.defaultHeaders = {
       'Content-Type': 'application/json',

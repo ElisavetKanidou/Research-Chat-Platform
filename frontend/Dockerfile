@@ -14,8 +14,11 @@ RUN npm ci && npm install -D @types/node && npm cache clean --force
 # Copy source code
 COPY . .
 
-# Build argument for API URL
-ARG VITE_API_URL=http://localhost:8080/api/v1
+# Clean any TypeScript build cache
+RUN rm -rf node_modules/.tmp node_modules/.cache .vite 2>/dev/null || true
+
+# Build argument for API URL (empty by default - auto-detected at runtime)
+ARG VITE_API_URL=
 ENV VITE_API_URL=$VITE_API_URL
 
 # Build the application

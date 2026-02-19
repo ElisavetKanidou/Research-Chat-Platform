@@ -2,8 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import type { PresenceStatus } from '../components/PresenceIndicator';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+import { getApiBaseUrl, getWebSocketUrl } from '../config/api';
 
 interface PresenceData {
   status: PresenceStatus;
@@ -44,7 +43,7 @@ export const usePresence = (userIds: string[] = []): UsePresenceReturn => {
       }
 
       await axios.post(
-        `${API_BASE_URL}/api/v1/presence/heartbeat`,
+        `${getApiBaseUrl()}/presence/heartbeat`,
         {},
         {
           headers: { Authorization: `Bearer ${token}` }
@@ -67,7 +66,7 @@ export const usePresence = (userIds: string[] = []): UsePresenceReturn => {
       }
 
       const response = await axios.post(
-        `${API_BASE_URL}/api/v1/presence/bulk-status`,
+        `${getApiBaseUrl()}/presence/bulk-status`,
         targetUserIds,
         {
           headers: { Authorization: `Bearer ${token}` }
@@ -104,7 +103,7 @@ export const usePresence = (userIds: string[] = []): UsePresenceReturn => {
     }
 
     // Connect to WebSocket
-    const wsUrl = `${API_BASE_URL.replace('http', 'ws')}/api/v1/ws?token=${token}`;
+    const wsUrl = `${getWebSocketUrl()}?token=${token}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {

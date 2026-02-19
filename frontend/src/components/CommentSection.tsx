@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { MessageCircle, Send, Check, X, Trash2, User, Quote } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { API_BASE_URL } from '../config/api';
 
 interface Comment {
   id: string;
@@ -56,7 +57,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   const fetchComments = async () => {
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/papers/${paperId}/sections/${sectionId}/comments?include_resolved=${includeResolved}`,
+        `${API_BASE_URL}/papers/${paperId}/sections/${sectionId}/comments?include_resolved=${includeResolved}`,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
@@ -116,7 +117,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
       }
 
       const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/papers/${paperId}/comments`,
+        `${API_BASE_URL}/papers/${paperId}/comments`,
         {
           method: 'POST',
           headers: {
@@ -146,7 +147,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   const handleToggleResolve = async (commentId: string, isResolved: boolean) => {
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/papers/${paperId}/comments/${commentId}`,
+        `${API_BASE_URL}/papers/${paperId}/comments/${commentId}`,
         {
           method: 'PATCH',
           headers: {
@@ -173,7 +174,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/papers/${paperId}/comments/${commentId}`,
+        `${API_BASE_URL}/papers/${paperId}/comments/${commentId}`,
         {
           method: 'DELETE',
           headers: {
@@ -392,4 +393,5 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   );
 };
 
+export { CommentSection };
 export default CommentSection;

@@ -7,6 +7,7 @@ import { paperService } from '../services/paperService';
 import { apiClient } from '../utils/apiHelpers';
 import InviteCollaboratorsModal from '../components/modals/InviteCollaboratorsModal';
 import CommentSection from '../components/CommentSection';
+import { API_BASE_URL } from '../config/api';
 
 interface Friend {
   id: string;
@@ -56,7 +57,7 @@ const CurrentPaperComponent: React.FC = () => {
       try {
         const token = localStorage.getItem('auth_token');
         const response = await fetch(
-          `http://127.0.0.1:8000/api/v1/collaborations/paper/${activePaper.id}`,
+          `${API_BASE_URL}/collaborations/paper/${activePaper.id}`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -310,7 +311,7 @@ const CurrentPaperComponent: React.FC = () => {
       });
 
       // Call the export API
-      const baseUrl = (apiClient as any).baseUrl || 'http://127.0.0.1:8000/api/v1';
+      const baseUrl = (apiClient as any).baseUrl || API_BASE_URL;
       const response = await fetch(
         `${baseUrl}/papers/${activePaper.id}/export?format=${format}`,
         {
@@ -396,7 +397,7 @@ const CurrentPaperComponent: React.FC = () => {
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/collaborations/search-friends?query=${encodeURIComponent(query)}`,
+        `${API_BASE_URL}/collaborations/search-friends?query=${encodeURIComponent(query)}`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
@@ -425,7 +426,7 @@ const CurrentPaperComponent: React.FC = () => {
     try {
       const token = localStorage.getItem('auth_token');
       
-      const response = await fetch('http://127.0.0.1:8000/api/v1/collaborations/add-friend-to-paper', {
+      const response = await fetch(`${API_BASE_URL}/collaborations/add-friend-to-paper`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

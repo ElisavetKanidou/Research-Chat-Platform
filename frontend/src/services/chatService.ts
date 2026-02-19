@@ -1,5 +1,5 @@
 // services/chatService.ts
-
+import { API_BASE_URL } from '../config/api';
 import type { Paper } from '../types/paper';
 
 export interface ChatMessage {
@@ -68,7 +68,7 @@ export interface ChatResponse {
 }
 
 class ChatService {
-  private readonly apiUrl = 'http://127.0.0.1:8000/api/chat';
+  private readonly apiUrl = API_BASE_URL.replace('/api/v1', '/api/chat');
   private conversationHistory: Map<string, ChatMessage[]> = new Map();
 
   // Send message to AI assistant

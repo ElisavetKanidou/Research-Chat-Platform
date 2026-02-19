@@ -5,6 +5,7 @@
  * const { isConnected, notifications } = useWebSocket();
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { getWebSocketUrl } from '../config/api';
 
 interface WebSocketMessage {
   type: string;
@@ -18,7 +19,7 @@ interface UseWebSocketReturn {
   subscribe: (channel: string) => void;
 }
 
-const WS_URL = 'ws://127.0.0.1:8000/api/v1/ws';
+const WS_URL = getWebSocketUrl();
 const RECONNECT_INTERVAL = 5000; // 5 seconds
 const PING_INTERVAL = 30000; // 30 seconds
 

@@ -4,6 +4,7 @@ import { Users, Mail, MoreVertical, Trash2, Edit } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import { usePresence } from '../hooks/usePresence';
 import PresenceIndicator from './PresenceIndicator';
+import { API_BASE_URL } from '../config/api';
 
 interface Collaborator {
   id: string;
@@ -42,9 +43,9 @@ const CollaboratorsList: React.FC<CollaboratorsListProps> = ({ paperId, compact 
       const token = localStorage.getItem('auth_token');
       
       // ✅ If no paperId, fetch ALL collaborators across all papers
-      const url = paperId 
-        ? `http://127.0.0.1:8000/api/v1/collaborations/paper/${paperId}`
-        : `http://127.0.0.1:8000/api/v1/collaborations/all`;
+      const url = paperId
+        ? `${API_BASE_URL}/collaborations/paper/${paperId}`
+        : `${API_BASE_URL}/collaborations/all`;
       
       console.log('🤝 Fetching collaborators from:', url);
       
@@ -74,7 +75,7 @@ const CollaboratorsList: React.FC<CollaboratorsListProps> = ({ paperId, compact 
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/collaborations/${collaboratorId}`,
+        `${API_BASE_URL}/collaborations/${collaboratorId}`,
         {
           method: 'DELETE',
           headers: {
@@ -106,7 +107,7 @@ const CollaboratorsList: React.FC<CollaboratorsListProps> = ({ paperId, compact 
     try {
       const token = localStorage.getItem('auth_token');
       const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/collaborations/${collaboratorId}/role`,
+        `${API_BASE_URL}/collaborations/${collaboratorId}/role`,
         {
           method: 'PATCH',
           headers: {

@@ -601,10 +601,15 @@ async def export_paper(
             f"Invalid export format: {format}. Must be one of: {', '.join(valid_formats)}"
         )
 
-    # Get paper with sections eagerly loaded
+    # Get paper with sections, collaborators, and owner eagerly loaded
+    from app.models.paper import PaperCollaborator
     query = (
         select(Paper)
-        .options(selectinload(Paper.sections))
+        .options(
+            selectinload(Paper.sections),
+            selectinload(Paper.collaborators).selectinload(PaperCollaborator.user),
+            selectinload(Paper.owner)
+        )
         .where(Paper.id == paper_id)
     )
     result = await db.execute(query)

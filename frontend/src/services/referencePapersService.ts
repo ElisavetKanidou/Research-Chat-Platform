@@ -1,4 +1,5 @@
 // services/referencePapersService.ts
+import { API_BASE_URL } from '../config/api';
 
 export type PaperType = 'lab' | 'personal' | 'literature';
 
@@ -78,7 +79,7 @@ export interface UpdateReferencePaperRequest {
 }
 
 class ReferencePapersService {
-  private readonly apiUrl = 'http://127.0.0.1:8000/api/v1/reference-papers';
+  private readonly apiUrl = `${API_BASE_URL}/reference-papers`;
 
   /**
    * Upload a new reference paper

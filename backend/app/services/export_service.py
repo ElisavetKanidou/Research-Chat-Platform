@@ -57,13 +57,16 @@ class ExportService:
     ) -> Dict[str, Any]:
         """Export paper to JSON format"""
 
+        # Get collaborator names
+        collaborator_names = [collab.user.name for collab in paper.collaborators if collab.user]
+
         export_data = {
             "title": paper.title,
             "abstract": paper.abstract,
             "status": paper.status.value,
             "research_area": paper.research_area,
             "tags": paper.tags,
-            "co_authors": paper.co_authors,
+            "collaborators": collaborator_names,
             "created_at": paper.created_at.isoformat(),
             "updated_at": paper.updated_at.isoformat(),
             "word_count": paper.current_word_count,
@@ -117,9 +120,11 @@ class ExportService:
             content += "## Abstract\n\n"
             content += f"{paper.abstract}\n\n"
 
-        if paper.co_authors:
+        # Get collaborator names
+        collaborator_names = [collab.user.name for collab in paper.collaborators if collab.user]
+        if collaborator_names:
             content += "## Authors\n\n"
-            content += ", ".join(paper.co_authors) + "\n\n"
+            content += ", ".join(collaborator_names) + "\n\n"
 
         # Add sections
         for section in sorted(sections, key=lambda x: x.order):
@@ -156,8 +161,11 @@ class ExportService:
         content += "\\usepackage{graphicx}\n\n"
 
         content += f"\\title{{{paper.title}}}\n"
-        if paper.co_authors:
-            content += f"\\author{{{', '.join(paper.co_authors)}}}\n"
+
+        # Get collaborator names
+        collaborator_names = [collab.user.name for collab in paper.collaborators if collab.user]
+        if collaborator_names:
+            content += f"\\author{{{', '.join(collaborator_names)}}}\n"
         content += "\\date{\\today}\n\n"
 
         content += "\\begin{document}\n\n"

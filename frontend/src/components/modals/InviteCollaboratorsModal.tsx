@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { X, Mail, UserPlus, Check, AlertCircle } from 'lucide-react';
 import { useGlobalContext } from '../../contexts/GlobalContext';
+import { API_BASE_URL } from '../../config/api';
 
 interface InviteCollaboratorsModalProps {
   isOpen: boolean;
@@ -62,7 +63,7 @@ const InviteCollaboratorsModal: React.FC<InviteCollaboratorsModalProps> = ({
 
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch('http://127.0.0.1:8000/api/v1/collaborations/invite', {
+      const response = await fetch(`${API_BASE_URL}/collaborations/invite`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

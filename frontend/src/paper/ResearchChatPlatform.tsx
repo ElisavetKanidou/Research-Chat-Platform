@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Download, Settings, Loader, CheckCircle, XCircle, Plus, ChevronDown, Paperclip, X, FileText } from 'lucide-react';
 import { useGlobalContext } from '../contexts/GlobalContext';
 import { paperService } from '../services/paperService';
+import { API_BASE_URL } from '../config/api';
 import type { Paper } from '../types/paper';
 import type { ChatMessageRequest, ChatMessageResponse, ChatAttachment } from '../types/api';
 
@@ -58,7 +59,7 @@ interface ResearchChatPlatformProps {
   onNavigateToSettings?: () => void; // ✅ NEW: Callback to navigate to settings tab
 }
 
-const API_URL = 'http://127.0.0.1:8000/api/v1';
+const API_URL = API_BASE_URL;
 
 const ResearchChatPlatform: React.FC<ResearchChatPlatformProps> = ({ 
   paperContext: paperContextProp,

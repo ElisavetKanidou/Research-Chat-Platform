@@ -120,6 +120,27 @@ class Paper(BaseModel):
     def __repr__(self) -> str:
         return f"<Paper(id={self.id}, title='{self.title}', status='{self.status}')>"
 
+    # ==================== COMPUTED PROPERTIES ====================
+
+    @property
+    def co_authors(self) -> list:
+        """
+        Get list of collaborator names (backward compatibility property)
+        Returns owner + all collaborators with accepted status
+        """
+        authors = []
+
+        # Add owner
+        if self.owner:
+            authors.append(self.owner.name)
+
+        # Add collaborators
+        for collab in self.collaborators:
+            if collab.status == "accepted" and collab.user:
+                authors.append(collab.user.name)
+
+        return authors
+
     # ==================== PROGRESS & WORD COUNT ====================
 
     def calculate_progress(self) -> int:

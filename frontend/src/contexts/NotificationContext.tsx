@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Notification } from '../types/notification';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { API_BASE_URL } from '../config/api';
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -42,7 +43,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       setLoading(true);
-      const response = await fetch('http://127.0.0.1:8000/api/v1/notifications/', {
+      const response = await fetch(`${API_BASE_URL}/notifications/`, {
         headers: getAuthHeaders()
       });
 
@@ -133,7 +134,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
 
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/notifications/${id}/read`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
         method: 'POST',
         headers: getAuthHeaders()
       });
@@ -157,7 +158,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
 
-      const response = await fetch('http://127.0.0.1:8000/api/v1/notifications/mark-all-read', {
+      const response = await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
         method: 'POST',
         headers: getAuthHeaders()
       });
@@ -183,7 +184,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
 
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/notifications/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
@@ -207,7 +208,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setNotifications([]);
       setUnreadCount(0);
 
-      const response = await fetch('http://127.0.0.1:8000/api/v1/notifications/clear-all', {
+      const response = await fetch(`${API_BASE_URL}/notifications/clear-all`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });

@@ -1,6 +1,9 @@
 node_modules/
 dist/
 build/
+.vite/
+.tmp/
+*.tsbuildinfo
 .git/
 .gitignore
 *.log

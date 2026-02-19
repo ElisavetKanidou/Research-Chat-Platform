@@ -6,6 +6,7 @@ import { usePaperManagement } from '../hooks/usePaperManagement';
 import { authService } from '../services/authService';
 import type { UserResponse } from '../types/api';
 import { paperService } from '../services/paperService';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 // Local interfaces to avoid conflicts
 export interface AppNotification {
@@ -428,6 +429,21 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const refreshPapers = useCallback(async () => {
     await paperManagement.loadPapers();
   }, [paperManagement]);
+
+  // ✅ Listen for collaboration updates via WebSocket
+  const { lastMessage } = useWebSocket();
+
+  useEffect(() => {
+    if (!lastMessage) return;
+
+    // Handle collaboration updates - refresh papers to show newly shared paper
+    if (lastMessage.type === 'notification' &&
+        (lastMessage.notification_type === 'collaboration_invite' ||
+         lastMessage.notification_type === 'collaborator_added')) {
+      console.log('👥 Collaboration update received, refreshing papers...');
+      refreshPapers();
+    }
+  }, [lastMessage, refreshPapers]);
 
   const contextValue: GlobalContextType = {
     // Paper management
